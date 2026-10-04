@@ -20,7 +20,8 @@ class StageOneTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.database_path = Path(self.directory.name) / "prueba con espacios.db"
         self.original_config = app.config.copy()
-        app.config.update(TESTING=True, DATABASE_PATH=str(self.database_path))
+        app.config.update(TESTING=True, DATABASE_PATH=str(self.database_path),
+                          SECRET_KEY="clave-de-prueba")
 
     def tearDown(self):
         app.config.clear()
@@ -33,12 +34,13 @@ class StageOneTests(unittest.TestCase):
 
     def test_imports_and_home_do_not_create_database(self):
         environment = os.environ.copy()
-        environment.update(DATABASE_PATH=str(self.database_path), FLASK_DEBUG="0")
+        environment.update(DATABASE_PATH=str(self.database_path), FLASK_DEBUG="0",
+                           SECRET_KEY="clave-de-prueba")
         result = subprocess.run(
             [sys.executable, "-B", "-c",
              "import run; import app.utils.data.CRUD; "
              "assert not run.app.debug; "
-             "assert run.app.test_client().get('/').status_code == 200"],
+             "assert run.app.test_client().get('/').status_code == 302"],
             cwd=PROJECT_ROOT,
             env=environment,
             capture_output=True,
@@ -48,7 +50,8 @@ class StageOneTests(unittest.TestCase):
         self.assertFalse(self.database_path.exists())
 
     def test_home_renders_spanish_template_without_database(self):
-        response = app.test_client().get("/")
+        self.assertEqual(app.test_client().get("/").status_code, 302)
+        response = app.test_client().get("/auth/login")
         self.assertEqual(response.status_code, 200)
         self.assertIn('lang="es"', response.get_data(as_text=True))
         self.assertIn("Sala de Tareas", response.get_data(as_text=True))
@@ -56,7 +59,8 @@ class StageOneTests(unittest.TestCase):
 
     def test_missing_database_is_not_created_by_connection(self):
         with app.app_context():
-            with self.assertRaises(sqlite3.OperationalError):
+            with self.assertLogs("app.utils.data.database", level="ERROR"), \
+                    self.assertRaises(sqlite3.OperationalError):
                 with get_connection():
                     pass
         self.assertFalse(self.database_path.exists())

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>No se pudo completar la solicitud</h2>
+<p role="alert">{{ message }}</p>
+{% if g.user %}<a href="{{ url_for('index') }}">Volver al inicio</a>{% else %}<a href="{{ url_for('login') }}">Ir al acceso</a>{% endif %}
+{% endblock %}

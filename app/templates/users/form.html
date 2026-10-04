@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Editar usuario' if editing else 'Crear usuario' }}</h2>
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% for field, label, kind, limit in [('nombre', 'Nombre', 'text', 100), ('correo', 'Correo', 'email', 120), ('telefono', 'Teléfono (opcional)', 'tel', 30)] %}
+        <label for="{{ field }}">{{ label }}</label>
+        <input id="{{ field }}" name="{{ field }}" type="{{ kind }}" maxlength="{{ limit }}" value="{{ values.get(field) or '' }}" {% if field != 'telefono' %}required{% endif %} {% if errors.get(field) %}aria-invalid="true" aria-describedby="{{ field }}-error"{% endif %}>
+        {% if errors.get(field) %}<p id="{{ field }}-error" class="error">{{ errors[field] }}</p>{% endif %}
+    {% endfor %}
+    <label for="contrasena">{{ 'Nueva contraseña (dejar vacía para conservar)' if editing else 'Contraseña' }}</label>
+    <input id="contrasena" name="contrasena" type="password" minlength="8" maxlength="128" autocomplete="new-password" {% if not editing %}required{% endif %}>
+    {% if errors.get('contrasena') %}<p class="error">{{ errors.contrasena }}</p>{% endif %}
+    <label for="rol">Rol</label>
+    <select id="rol" name="rol">
+        <option value="member" {% if values.rol == 'member' %}selected{% endif %}>Miembro</option>
+        <option value="admin" {% if values.rol == 'admin' %}selected{% endif %}>Administrador</option>
+    </select>
+    {% if errors.get('rol') %}<p class="error">{{ errors.rol }}</p>{% endif %}
+    <label for="activo">Estado</label>
+    <select id="activo" name="activo">
+        <option value="1" {% if values.activo|string == '1' %}selected{% endif %}>Activo</option>
+        <option value="0" {% if values.activo|string == '0' %}selected{% endif %}>Inactivo</option>
+    </select>
+    {% if errors.get('activo') %}<p class="error">{{ errors.activo }}</p>{% endif %}
+    <div class="actions"><button type="submit">Guardar usuario</button><a href="{{ url_for('users_list') }}">Cancelar</a></div>
+</form>
+{% endblock %}

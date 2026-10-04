@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Usuarios</h2>
+<p><a href="{{ url_for('user_create') }}">Crear usuario</a></p>
+{% if users %}
+<div class="table-scroll"><table>
+    <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>{% for user in users %}<tr>
+        <td>{{ user.nombre }}</td><td>{{ user.correo }}</td><td>{{ 'Administrador' if user.rol == 'admin' else 'Miembro' }}</td>
+        <td>{{ 'Activo' if user.activo else 'Inactivo' }}</td>
+        <td><a href="{{ url_for('user_detail', user_id=user.id) }}">Ver detalle</a></td>
+    </tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<p>No hay usuarios registrados.</p>{% endif %}
+{% endblock %}
