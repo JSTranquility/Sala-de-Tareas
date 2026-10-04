@@ -22,3 +22,8 @@ instance/
 
 .DS_Store
 Thumbs.db
+
+# Instrucciones y planes locales
+agents.md
+PLAN_PROXIMOS_PASOS.md
+PLAN_SEGUN_AGENTS.md

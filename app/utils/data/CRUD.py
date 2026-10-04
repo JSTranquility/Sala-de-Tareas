@@ -1,6 +1,6 @@
 from flask import jsonify
 
-from app.utils.database import get_connection
+from app.utils.data.database import get_connection
 #Funciones CRUD para la aplicacion
 
 #Crear usuario
