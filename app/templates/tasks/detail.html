@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ task.titulo }}</h2>
+<dl>
+    <dt>Descripción</dt>
+    <dd class="description">{{ task.descripcion or 'Sin descripción' }}</dd>
+    <dt>Estado</dt>
+    <dd>{{ task_states.get(task.estado, task.estado) }}</dd>
+    <dt>Prioridad</dt>
+    <dd>{{ task_priorities.get(task.prioridad, 'Sin especificar') }}</dd>
+    <dt>Vencimiento</dt>
+    <dd>{{ task.fecha_vencimiento or 'Sin vencimiento' }}</dd>
+    <dt>Usuario asignado</dt>
+    <dd>{{ task.usuario_asignado_nombre or 'Sin asignar' }}</dd>
+    <dt>Creado por</dt>
+    <dd>{{ task.creador_nombre or 'No consta (tarea histórica)' }}</dd>
+    <dt>Materia</dt>
+    <dd>{{ task.materia_nombre or 'Sin materia' }}</dd>
+    <dt>Fecha de creación</dt>
+    <dd>{{ task.fecha_creacion or 'No consta' }}</dd>
+    <dt>Última actualización</dt>
+    <dd>{{ task.fecha_actualizacion or 'No consta (tarea histórica)' }}</dd>
+</dl>
+<p>Las fechas de creación y actualización se muestran en UTC.</p>
+{% if g.user.rol == 'admin' %}
+<div class="actions">
+    <a href="{{ url_for('task_edit', task_id=task.id) }}">Editar tarea</a>
+    <a href="{{ url_for('tasks_list') }}">Volver a tareas</a>
+</div>
+<form method="post" action="{{ url_for('task_delete', task_id=task.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>Eliminar es definitivo. Si tiene pagos o registros asociados, se conservará.</p>
+    <label for="confirm-delete">
+        <input id="confirm-delete" type="checkbox" required style="width: auto">
+        Confirmo que quiero eliminar esta tarea.
+    </label>
+    <button type="submit">Eliminar tarea</button>
+</form>
+{% else %}
+<form method="post" action="{{ url_for('task_edit', task_id=task.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="estado">Cambiar estado</label>
+    <select id="estado" name="estado"
+            {% if errors.get('estado') %}
+                aria-invalid="true" aria-describedby="estado-error"
+            {% endif %}>
+        {% for value, caption in task_states.items() %}
+            <option value="{{ value }}" {% if values.estado == value %}selected{% endif %}>
+                {{ caption }}
+            </option>
+        {% endfor %}
+    </select>
+    {% if errors.get('estado') %}
+        <p id="estado-error" class="error">{{ errors.estado }}</p>
+    {% endif %}
+    <div class="actions">
+        <button type="submit">Guardar estado</button>
+        <a href="{{ url_for('tasks_list') }}">Volver a mis tareas</a>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

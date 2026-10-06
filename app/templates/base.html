@@ -5,22 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Sala de Tareas{% endblock %}</title>
     <style>
-        body { font-family: system-ui, sans-serif; color: #172c3b; background: #f4f7f9; margin: 0; }
-        header, main { max-width: 960px; margin: auto; padding: 1.5rem; }
-        header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
-        header h1 { margin-right: auto; font-size: 1.4rem; }
-        a { color: #075b92; }
-        nav { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-        main { background: white; border-radius: 12px; }
-        label { display: block; margin: 1rem 0 .3rem; }
-        input, select, button { font: inherit; padding: .6rem; box-sizing: border-box; }
-        input, select { width: 100%; max-width: 460px; border: 1px solid #8496a1; border-radius: 5px; }
-        button { cursor: pointer; border-radius: 5px; border: 1px solid #075b92; background: #075b92; color: white; }
-        .actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: 1.5rem; }
-        .error { color: #9c2020; } .message { padding: .8rem; background: #e8f2fa; }
-        .table-scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; }
-        th, td { padding: .8rem; text-align: left; border-bottom: 1px solid #ddd; }
-        dt { font-weight: bold; margin-top: 1rem; } dd { margin: .3rem 0; overflow-wrap: anywhere; }
+        /* Estructura de las páginas */
+        body {
+            font-family: system-ui, sans-serif;
+            color: #172c3b;
+            background: #f4f7f9;
+            margin: 0;
+        }
+        header, main {
+            max-width: 960px;
+            margin: auto;
+            padding: 1.5rem;
+        }
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem;
+        }
+        header h1 {
+            margin-right: auto;
+            font-size: 1.4rem;
+        }
+        a {
+            color: #075b92;
+        }
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        main {
+            background: white;
+            border-radius: 12px;
+        }
+
+        /* Formularios y botones */
+        label {
+            display: block;
+            margin: 1rem 0 .3rem;
+        }
+        input, select, textarea, button {
+            font: inherit;
+            padding: .6rem;
+            box-sizing: border-box;
+        }
+        input, select, textarea {
+            width: 100%;
+            max-width: 460px;
+            border: 1px solid #8496a1;
+            border-radius: 5px;
+        }
+        textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+        button {
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #075b92;
+            background: #075b92;
+            color: white;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        /* Mensajes y presentación de datos */
+        .error {
+            color: #9c2020;
+        }
+        .message {
+            padding: .8rem;
+            background: #e8f2fa;
+        }
+        .table-scroll {
+            overflow-x: auto;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            padding: .8rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        dt {
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+        dd {
+            margin: .3rem 0;
+            overflow-wrap: anywhere;
+        }
+        .description {
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -29,7 +115,13 @@
         {% if g.user %}
         <nav aria-label="Navegación principal">
             <a href="{{ url_for('index') }}">Inicio</a>
-            {% if g.user.rol == 'admin' %}<a href="{{ url_for('users_list') }}">Usuarios</a>{% endif %}
+            <a href="{{ url_for('tasks_list') }}">
+                {{ 'Tareas' if g.user.rol == 'admin' else 'Mis tareas' }}
+            </a>
+            {% if g.user.rol == 'admin' %}
+                <a href="{{ url_for('users_list') }}">Usuarios</a>
+                <a href="{{ url_for('payments_list') }}">Pagos</a>
+            {% endif %}
             <form method="post" action="{{ url_for('logout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit">Cerrar sesión</button>
@@ -38,7 +130,9 @@
         {% endif %}
     </header>
     <main>
-        {% for message in get_flashed_messages() %}<p class="message" role="status">{{ message }}</p>{% endfor %}
+        {% for message in get_flashed_messages() %}
+            <p class="message" role="status">{{ message }}</p>
+        {% endfor %}
         {% block content %}{% endblock %}
     </main>
 </body>

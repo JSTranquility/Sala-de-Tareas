@@ -120,14 +120,15 @@ class CrudTests(unittest.TestCase):
             crud.delete_user(user_id)
         self.assertIsNotNone(crud.get_user_by_id(user_id))
 
-    def test_payment_reads_preserve_legacy_amounts_and_block_user_deletion(self):
+    def test_payment_reads_use_cents_and_block_user_deletion(self):
         user_id = self.create_user()
         other_id = self.create_user("other@example.test")
-        # Datos heredados: no activar todavía una API de dinero en centavos.
-        payment_id = crud.create_payment(user_id, "12.50")
+        # Los pagos nuevos usan centavos y una moneda explícita.
+        task_id = crud.create_task("Tarea pagada", None, None, "pendiente", user_id, None)
+        payment_id = crud.create_payment(user_id, 1250, task_id, "USD", "efectivo")
         self.assertIsInstance(payment_id, int)
         payment = crud.get_payment_by_id(payment_id)
-        self.assertEqual(payment["monto"], 12.5)
+        self.assertEqual(payment["monto"], 1250)
         self.assertEqual(crud.get_all_payments(), [payment])
         self.assertEqual(crud.get_payments_by_user(user_id), [payment])
         self.assertEqual(crud.get_payments_by_user(other_id), [])

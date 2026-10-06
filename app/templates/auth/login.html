@@ -2,14 +2,20 @@
 {% block title %}Iniciar sesión — Sala de Tareas{% endblock %}
 {% block content %}
 <h2>Iniciar sesión</h2>
-{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+{% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+{% endif %}
 <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="correo">Correo</label>
-    <input id="correo" name="correo" type="email" maxlength="120" autocomplete="username" value="{{ email }}" required>
+    <input id="correo" name="correo" type="email" maxlength="120"
+           autocomplete="username" value="{{ email }}" required>
     <label for="contrasena">Contraseña</label>
-    <input id="contrasena" name="contrasena" type="password" maxlength="128" autocomplete="current-password" required>
-    <div class="actions"><button type="submit">Entrar</button></div>
+    <input id="contrasena" name="contrasena" type="password" maxlength="128"
+           autocomplete="current-password" required>
+    <div class="actions">
+        <button type="submit">Entrar</button>
+    </div>
 </form>
 <p>Si necesitas una cuenta o recuperar el acceso, contacta con la persona administradora.</p>
 {% endblock %}

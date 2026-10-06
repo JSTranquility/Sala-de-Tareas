@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Editar notas del pago' if notes_only else ('Editar pago' if editing else 'Registrar pago') }}</h2>
+{% if errors.get('general') %}
+    <p class="error" role="alert">{{ errors.general }}</p>
+{% endif %}
+{% if editing and payment.pendiente_completar %}
+    <p class="message">Este pago histórico necesita revisión. Selecciona la tarea y la moneda correctas antes de guardar; la fecha de pago se registrará ahora si lo marcas pagado.</p>
+{% endif %}
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if notes_only %}
+        <p>Pago registrado: {{ payment.moneda }} {{ payment.monto|amount }} para {{ payment.receptor_nombre }}.</p>
+        <p>Sus datos económicos y su fecha de pago se conservan. Puedes corregir las notas o anularlo desde el detalle.</p>
+    {% else %}
+        {% if editing %}
+            <p>Relaciones actuales: {{ payment.tarea_titulo or 'Sin tarea identificada' }}; receptor {{ payment.receptor_nombre }}. Selecciona una tarea no cancelada y un receptor activo para guardar.</p>
+        {% endif %}
+        <label for="tarea_id">Tarea</label>
+        <select id="tarea_id" name="tarea_id" required>
+            <option value="">Seleccionar tarea</option>
+            {% for task in tasks %}
+                <option value="{{ task.id }}" {% if values.get('tarea_id')|string == task.id|string %}selected{% endif %}>#{{ task.id }} — {{ task.titulo }}</option>
+            {% endfor %}
+        </select>
+        {% if errors.get('tarea_id') %}<p class="error">{{ errors.tarea_id }}</p>{% endif %}
+
+        <label for="usuario_id">Usuario receptor</label>
+        <select id="usuario_id" name="usuario_id" required>
+            <option value="">Seleccionar usuario activo</option>
+            {% for user in users %}
+                <option value="{{ user.id }}" {% if values.get('usuario_id')|string == user.id|string %}selected{% endif %}>{{ user.nombre }} — {{ user.correo }}</option>
+            {% endfor %}
+        </select>
+        {% if errors.get('usuario_id') %}<p class="error">{{ errors.usuario_id }}</p>{% endif %}
+
+        <label for="monto">Monto</label>
+        <input id="monto" name="monto" type="text" inputmode="decimal" maxlength="20"
+               value="{{ values.get('monto') or '' }}" placeholder="Ejemplo: 125.50" required>
+        <p>Usa punto para los decimales. Se permiten hasta dos decimales y un monto mayor que cero.</p>
+        {% if errors.get('monto') %}<p class="error">{{ errors.monto }}</p>{% endif %}
+
+        <label for="moneda">Moneda</label>
+        <select id="moneda" name="moneda" required>
+            <option value="">Seleccionar moneda</option>
+            {% for value, caption in payment_currencies.items() %}
+                <option value="{{ value }}" {% if values.get('moneda') == value %}selected{% endif %}>{{ caption }}</option>
+            {% endfor %}
+        </select>
+        {% if errors.get('moneda') %}<p class="error">{{ errors.moneda }}</p>{% endif %}
+
+        <label for="metodo">Método de pago</label>
+        <select id="metodo" name="metodo" required>
+            <option value="">Seleccionar método</option>
+            {% for value, caption in payment_methods.items() %}
+                <option value="{{ value }}" {% if values.get('metodo') == value %}selected{% endif %}>{{ caption }}</option>
+            {% endfor %}
+        </select>
+        {% if errors.get('metodo') %}<p class="error">{{ errors.metodo }}</p>{% endif %}
+
+        <label for="estado">Estado</label>
+        <select id="estado" name="estado" required>
+            <option value="">Seleccionar estado</option>
+            <option value="pendiente" {% if values.get('estado') == 'pendiente' %}selected{% endif %}>Pendiente</option>
+            <option value="pagado" {% if values.get('estado') == 'pagado' %}selected{% endif %}>Pagado</option>
+        </select>
+        {% if errors.get('estado') %}<p class="error">{{ errors.estado }}</p>{% endif %}
+        <p>Al marcar pagado, se registra automáticamente la fecha y se conservan sus datos económicos.</p>
+    {% endif %}
+
+    <label for="notas">Notas (opcional)</label>
+    <textarea id="notas" name="notas" maxlength="2000">{{ values.get('notas') or '' }}</textarea>
+    {% if errors.get('notas') %}<p class="error">{{ errors.notas }}</p>{% endif %}
+    <div class="actions">
+        <button type="submit">{{ 'Guardar notas' if notes_only else 'Guardar pago' }}</button>
+        <a href="{{ url_for('payments_list') }}">Cancelar</a>
+    </div>
+</form>
+{% endblock %}

@@ -169,7 +169,8 @@ class UsersAndAuthTests(unittest.TestCase):
     def test_related_user_is_preserved_and_can_be_deactivated(self):
         self.login()
         with self.app.app_context():
-            payment_id = crud.create_payment(self.member_id, '12.50')
+            task_id = crud.create_task('Tarea', None, None, 'pendiente', self.member_id, None)
+            payment_id = crud.create_payment(self.member_id, 1250, task_id, 'USD', 'efectivo')
         response = self.post(f'/users/{self.member_id}/delete', follow_redirects=True)
         self.assertIn('registros asociados', response.get_data(as_text=True))
         response = self.post(f'/users/{self.member_id}/edit', self.user_data(
@@ -177,7 +178,7 @@ class UsersAndAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         with self.app.app_context():
             self.assertEqual(crud.get_user_by_id(self.member_id)['activo'], 0)
-            self.assertEqual(crud.get_payment_by_id(payment_id)['monto'], 12.5)
+            self.assertEqual(crud.get_payment_by_id(payment_id)['monto'], 1250)
 
     def test_user_content_is_escaped(self):
         self.login()

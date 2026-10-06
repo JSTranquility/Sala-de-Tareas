@@ -2,6 +2,13 @@
 {% block content %}
 <h2>Bienvenido, {{ g.user.nombre }}</h2>
 <p>Organiza las tareas de tu equipo y sus pagos en un solo lugar.</p>
-{% if g.user.rol == 'admin' %}<p><a href="{{ url_for('users_list') }}">Gestionar usuarios</a></p>{% endif %}
-<p>La gestión de tareas y pagos estará disponible próximamente.</p>
+{% if g.user.rol == 'admin' %}
+    <p><a href="{{ url_for('users_list') }}">Gestionar usuarios</a></p>
+    <p><a href="{{ url_for('payments_list') }}">Gestionar pagos</a></p>
+{% endif %}
+<p>
+    <a href="{{ url_for('tasks_list') }}">
+        {{ 'Gestionar tareas' if g.user.rol == 'admin' else 'Consultar mis tareas' }}
+    </a>
+</p>
 {% endblock %}

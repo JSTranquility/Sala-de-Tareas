@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Pago #{{ payment.id }}</h2>
+{% if payment.pendiente_completar %}
+    <p class="message">Información histórica pendiente: revisa la tarea, moneda, estado, método e importe. No se han supuesto datos desconocidos.</p>
+{% endif %}
+<dl>
+    <dt>Tarea</dt>
+    <dd>
+        {% if payment.tarea_id %}
+            <a href="{{ url_for('task_detail', task_id=payment.tarea_id) }}">{{ payment.tarea_titulo }}</a>
+        {% else %}
+            Pendiente de completar
+        {% endif %}
+    </dd>
+    <dt>Usuario receptor</dt><dd>{{ payment.receptor_nombre }}</dd>
+    <dt>Importe</dt><dd>{{ payment.moneda or 'Moneda por identificar' }} {{ payment.monto|amount }}</dd>
+    <dt>Estado</dt><dd>{{ payment_states.get(payment.estado, 'Sin identificar') }}</dd>
+    <dt>Método</dt><dd>{{ payment_methods.get(payment.metodo, 'Sin identificar') }}</dd>
+    <dt>Fecha de pago</dt><dd>{{ payment.fecha_pago or 'Sin fecha registrada' }}</dd>
+    <dt>Fecha de creación</dt><dd>{{ payment.fecha_creacion or 'No consta' }}</dd>
+    <dt>Notas</dt><dd class="description">{{ payment.notas or 'Sin notas' }}</dd>
+    {% if payment.monto_original is not none %}
+        <dt>Importe original heredado</dt><dd>{{ payment.monto_original }} (en unidades monetarias, antes de la actualización)</dd>
+    {% endif %}
+</dl>
+<p>Las fechas nuevas se registran en UTC. La aplicación registra pagos; no realiza cobros ni transferencias.</p>
+<div class="actions">
+    {% if payment.estado != 'anulado' %}
+        <a href="{{ url_for('payment_edit', payment_id=payment.id) }}">{{ 'Editar notas' if payment.estado == 'pagado' else 'Editar pago' }}</a>
+    {% endif %}
+    <a href="{{ url_for('payments_list') }}">Volver a pagos</a>
+</div>
+{% if payment.estado != 'anulado' %}
+<form method="post" action="{{ url_for('payment_delete', payment_id=payment.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>Anular conserva el registro, el importe y su fecha de pago. Un pago anulado no se puede reactivar.</p>
+    <label for="confirm-annul">
+        <input id="confirm-annul" type="checkbox" required style="width: auto">
+        Confirmo que quiero anular este pago.
+    </label>
+    <button type="submit">Anular pago</button>
+</form>
+{% endif %}
+{% endblock %}

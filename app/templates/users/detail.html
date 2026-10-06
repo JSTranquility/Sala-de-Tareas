@@ -2,17 +2,26 @@
 {% block content %}
 <h2>{{ user.nombre }}</h2>
 <dl>
-    <dt>Correo</dt><dd>{{ user.correo }}</dd>
-    <dt>Teléfono</dt><dd>{{ user.telefono or 'Sin teléfono' }}</dd>
-    <dt>Rol</dt><dd>{{ 'Administrador' if user.rol == 'admin' else 'Miembro' }}</dd>
-    <dt>Estado</dt><dd>{{ 'Activo' if user.activo else 'Inactivo' }}</dd>
-    <dt>Fecha de creación</dt><dd>{{ user.fecha_creacion }}</dd>
+    <dt>Correo</dt>
+    <dd>{{ user.correo }}</dd>
+    <dt>Teléfono</dt>
+    <dd>{{ user.telefono or 'Sin teléfono' }}</dd>
+    <dt>Rol</dt>
+    <dd>{{ 'Administrador' if user.rol == 'admin' else 'Miembro' }}</dd>
+    <dt>Estado</dt>
+    <dd>{{ 'Activo' if user.activo else 'Inactivo' }}</dd>
+    <dt>Fecha de creación</dt>
+    <dd>{{ user.fecha_creacion }}</dd>
 </dl>
-<div class="actions"><a href="{{ url_for('user_edit', user_id=user.id) }}">Editar usuario</a><a href="{{ url_for('users_list') }}">Volver al listado</a></div>
+<div class="actions">
+    <a href="{{ url_for('user_edit', user_id=user.id) }}">Editar usuario</a>
+    <a href="{{ url_for('users_list') }}">Volver al listado</a>
+</div>
 {% if user.id != g.user.id %}
 <h3>Eliminar usuario</h3>
 <p>Esta acción elimina la cuenta. Si tiene registros asociados, se conservará y podrás desactivarla desde Editar.</p>
-<form method="post" action="{{ url_for('user_delete', user_id=user.id) }}" onsubmit="return confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.');">
+<form method="post" action="{{ url_for('user_delete', user_id=user.id) }}"
+      onsubmit="return confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit">Eliminar usuario</button>
 </form>

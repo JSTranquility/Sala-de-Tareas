@@ -1,4 +1,6 @@
-﻿from functools import wraps
+"""Rutas web, comprobaciones de acceso y comandos de administración."""
+
+from functools import wraps
 import secrets
 import sqlite3
 
@@ -8,10 +10,47 @@ from flask import (
 )
 from werkzeug.security import check_password_hash
 
-from app.forms import validate_user_form
+from app.forms import (
+    PAYMENT_CURRENCIES,
+    PAYMENT_METHODS,
+    PAYMENT_STATES,
+    TASK_PRIORITIES,
+    TASK_STATES,
+    validate_task_form,
+    validate_task_status,
+    validate_user_form,
+    validate_payment_form,
+    validate_payment_notes,
+)
+from app.models import format_amount
 from app.utils.data import CRUD as crud
 from app.utils.data.database import get_database_path, initialize_database
-from migrations.add_user_active import migrate
+from migrations.add_task_fields import migrate as migrate_tasks
+from migrations.add_user_active import migrate as migrate_users
+from migrations.add_payment_fields import migrate as migrate_payments
+
+
+# Comprobaciones compartidas por el login y las peticiones de la aplicación.
+
+
+def is_active_user(user: dict | None) -> bool:
+    """Comprueba que la cuenta exista, esté activa y tenga un rol permitido."""
+    if user is None:
+        return False
+    if user["activo"] != 1:
+        return False
+    return user["rol"] in {"admin", "member"}
+
+
+def password_matches(user: dict | None, password: str) -> bool:
+    """Verifica la contraseña únicamente para una cuenta que puede acceder."""
+    if not is_active_user(user) or len(password) > 128:
+        return False
+    try:
+        return check_password_hash(user["contrasena"], password)
+    except (ValueError, TypeError):
+        # Una credencial histórica inválida no debe interrumpir el login.
+        return False
 
 
 def csrf_token() -> str:
@@ -19,6 +58,27 @@ def csrf_token() -> str:
     if "csrf_token" not in session:
         session["csrf_token"] = secrets.token_urlsafe(32)
     return session["csrf_token"]
+
+
+def check_csrf() -> None:
+    """Rechaza operaciones cuyo token no corresponda a la sesión actual."""
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+
+    expected_token = session.get("csrf_token")
+    submitted_token = request.form.get("csrf_token", "")
+    error_message = (
+        "El formulario venció o no es válido. Vuelve a cargar la página."
+    )
+    if not isinstance(expected_token, str) or not submitted_token:
+        abort(400, description=error_message)
+
+    # Se comparan bytes para admitir también entradas con caracteres acentuados.
+    tokens_match = secrets.compare_digest(
+        expected_token.encode(), submitted_token.encode()
+    )
+    if not tokens_match:
+        abort(400, description=error_message)
 
 
 def login_required(view):
@@ -45,37 +105,53 @@ def admin_required(view):
 def register_routes(app: Flask) -> None:
     """Registra rutas y comandos; no inicializa ni actualiza datos al importar."""
     app.jinja_env.globals["csrf_token"] = csrf_token
+    app.jinja_env.globals["task_states"] = TASK_STATES
+    app.jinja_env.globals["task_priorities"] = TASK_PRIORITIES
+    app.jinja_env.globals["payment_states"] = PAYMENT_STATES
+    app.jinja_env.globals["payment_currencies"] = PAYMENT_CURRENCIES
+    app.jinja_env.globals["payment_methods"] = PAYMENT_METHODS
+    app.jinja_env.filters["amount"] = format_amount
+
+    # Antes de cada petición: cargar al usuario y comprobar el formulario.
 
     @app.before_request
     def load_user_and_check_csrf():
         g.user = None
         if not app.secret_key:
-            return render_template("error.html", message="El acceso no está configurado."), 503
+            return render_template(
+                "error.html", message="El acceso no está configurado."
+            ), 503
+
         user_id = session.get("user_id")
         if type(user_id) is int:
             user = crud.get_user_by_id(user_id)
-            if user and user["activo"] == 1 and user["rol"] in {"admin", "member"}:
+            if is_active_user(user):
                 g.user = user
             else:
                 session.clear()
-        if request.method not in {"GET", "HEAD", "OPTIONS"}:
-            expected = session.get("csrf_token")
-            supplied = request.form.get("csrf_token", "")
-            if (not isinstance(expected, str) or not supplied or
-                    not secrets.compare_digest(expected.encode(), supplied.encode())):
-                abort(400, description="El formulario venció o no es válido. Vuelve a cargar la página.")
+        check_csrf()
+
+    # Errores que pueden aparecer en distintas rutas.
 
     @app.errorhandler(sqlite3.Error)
     def database_error(error):
-        return render_template("error.html", message="No se pudo acceder a los datos. Inténtalo más tarde."), 503
+        return render_template(
+            "error.html",
+            message="No se pudo acceder a los datos. Inténtalo más tarde.",
+        ), 503
 
     @app.errorhandler(400)
     @app.errorhandler(403)
     @app.errorhandler(404)
     def request_error(error):
-        messages = {403: "No tienes permiso para realizar esta acción.",
-                    404: "No se encontró el registro solicitado."}
-        return render_template("error.html", message=messages.get(error.code, error.description)), error.code
+        messages = {
+            403: "No tienes permiso para realizar esta acción.",
+            404: "No se encontró el registro solicitado.",
+        }
+        message = messages.get(error.code, error.description)
+        return render_template("error.html", message=message), error.code
+
+    # Inicio y acceso.
 
     @app.get("/")
     @login_required
@@ -90,26 +166,28 @@ def register_routes(app: Flask) -> None:
         email = request.form.get("correo", "").strip().lower()
         if request.method == "POST":
             password = request.form.get("contrasena", "")
-            user = crud.get_user_for_auth_by_email(email) if len(email) <= 120 else None
-            valid = False
-            if user and user["activo"] == 1 and user["rol"] in {"admin", "member"} and len(password) <= 128:
-                try:
-                    valid = check_password_hash(user["contrasena"], password)
-                except (ValueError, TypeError):
-                    valid = False
-            if valid:
+            user = None
+            if len(email) <= 120:
+                user = crud.get_user_for_auth_by_email(email)
+
+            if password_matches(user, password):
                 session.clear()
                 session["user_id"] = user["id"]
                 csrf_token()
                 return redirect(url_for("index"))
             error = "Correo o contraseña incorrectos, o cuenta inactiva."
-        return render_template("auth/login.html", error=error, email=email), (400 if error else 200)
+        status_code = 400 if error else 200
+        return render_template(
+            "auth/login.html", error=error, email=email
+        ), status_code
 
     @app.post("/auth/logout")
     @login_required
     def logout():
         session.clear()
         return redirect(url_for("login"))
+
+    # Usuarios: todas las rutas requieren un administrador.
 
     @app.get("/users/")
     @admin_required
@@ -123,37 +201,65 @@ def register_routes(app: Flask) -> None:
         return user
 
     def save_user(user=None):
+        """Muestra el formulario o guarda un usuario después de validarlo."""
         editing = user is not None
-        values = dict(user) if editing else {"rol": "member", "activo": "1"}
+        if editing:
+            values = dict(user)
+        else:
+            values = {"rol": "member", "activo": "1"}
         errors = {}
+
         if request.method == "POST":
             values, errors = validate_user_form(request.form, editing=editing)
             existing = crud.get_user_by_email(values["correo"])
-            if existing and (not editing or existing["id"] != user["id"]):
-                errors["correo"] = "Ese correo ya pertenece a otro usuario."
+            if existing:
+                same_user = editing and existing["id"] == user["id"]
+                if not same_user:
+                    errors["correo"] = "Ese correo ya pertenece a otro usuario."
+
             if editing and user["id"] == g.user["id"]:
                 if values["rol"] != "admin" or values["activo"] != "1":
-                    errors["rol"] = "No puedes quitarte el rol de administrador ni desactivar tu propia cuenta."
+                    errors["rol"] = (
+                        "No puedes quitarte el rol de administrador "
+                        "ni desactivar tu propia cuenta."
+                    )
+
             if not errors:
                 try:
-                    arguments = (values["nombre"], values["correo"],
-                                 request.form.get("contrasena") or None,
-                                 values["telefono"] or None, values["rol"])
+                    password = request.form.get("contrasena") or None
                     if editing:
-                        affected = crud.update_user(user["id"], *arguments,
-                                                    activo=int(values["activo"]))
+                        affected = crud.update_user(
+                            id=user["id"],
+                            nombre=values["nombre"],
+                            correo=values["correo"],
+                            contrasena=password,
+                            telefono=values["telefono"] or None,
+                            rol=values["rol"],
+                            activo=int(values["activo"]),
+                        )
                         if not affected:
                             abort(404)
                         user_id = user["id"]
                     else:
-                        user_id = crud.create_user(*arguments, activo=int(values["activo"]))
+                        user_id = crud.create_user(
+                            nombre=values["nombre"],
+                            correo=values["correo"],
+                            contrasena=password,
+                            telefono=values["telefono"] or None,
+                            rol=values["rol"],
+                            activo=int(values["activo"]),
+                        )
                 except sqlite3.IntegrityError:
-                    errors["correo"] = "No se pudo guardar. Revisa el correo y los datos."
+                    errors["correo"] = (
+                        "No se pudo guardar. Revisa el correo y los datos."
+                    )
                 else:
                     flash("Usuario actualizado." if editing else "Usuario creado.")
                     return redirect(url_for("user_detail", user_id=user_id))
-        return render_template("users/form.html", values=values, errors=errors,
-                               editing=editing), (400 if errors else 200)
+        status_code = 400 if errors else 200
+        return render_template(
+            "users/form.html", values=values, errors=errors, editing=editing
+        ), status_code
 
     @app.route("/users/new", methods=["GET", "POST"])
     @admin_required
@@ -180,11 +286,353 @@ def register_routes(app: Flask) -> None:
             try:
                 crud.delete_user(user_id)
             except sqlite3.IntegrityError:
-                flash("Este usuario tiene registros asociados. Desactívalo desde Editar para conservarlos.")
+                flash(
+                    "Este usuario tiene registros asociados. "
+                    "Desactívalo desde Editar para conservarlos."
+                )
             else:
                 flash("Usuario eliminado.")
                 return redirect(url_for("users_list"))
         return redirect(url_for("user_detail", user_id=user_id))
+
+    # Tareas: los miembros solo pueden consultar y cambiar su propio estado.
+
+    @app.get("/tasks/")
+    @login_required
+    def tasks_list():
+        if g.user["rol"] == "admin":
+            tasks = crud.get_all_tasks()
+        else:
+            tasks = crud.get_tasks_by_user(g.user["id"])
+        return render_template("tasks/list.html", tasks=tasks)
+
+    def task_or_404(task_id):
+        """Busca la tarea y comprueba quién puede acceder a ese registro."""
+        task = crud.get_task_by_id(task_id)
+        if task is None:
+            abort(404)
+        if g.user["rol"] != "admin" and task["usuario_id"] != g.user["id"]:
+            abort(403)
+        return task
+
+    def validate_task_relations(values, errors):
+        """Comprueba los IDs válidos y añade errores si no se pueden usar."""
+        assigned_user_id = None
+        subject_id = None
+        if values["usuario_asignado_id"] and "usuario_asignado_id" not in errors:
+            assigned_user_id = int(values["usuario_asignado_id"])
+            assigned_user = crud.get_user_by_id(assigned_user_id)
+            if not assigned_user or assigned_user["activo"] != 1:
+                errors["usuario_asignado_id"] = (
+                    "Selecciona un usuario activo existente."
+                )
+
+        if values["materia_id"] and "materia_id" not in errors:
+            subject_id = int(values["materia_id"])
+            if crud.get_subject_by_id(subject_id) is None:
+                errors["materia_id"] = "Selecciona una materia existente."
+
+        return assigned_user_id, subject_id
+
+    def save_task(task=None):
+        """Muestra el formulario o guarda una tarea validada por el administrador."""
+        editing = task is not None
+        if editing:
+            values = dict(task)
+            values["usuario_asignado_id"] = task["usuario_id"]
+            creator_name = task["creador_nombre"]
+        else:
+            values = {"estado": "pendiente", "prioridad": "media"}
+            creator_name = g.user["nombre"]
+
+        # Las fechas históricas se conservan hasta editar; el formulario usa días.
+        if editing and values["fecha_vencimiento"]:
+            values["fecha_vencimiento"] = values["fecha_vencimiento"][:10]
+        errors = {}
+        if request.method == "POST":
+            values, errors = validate_task_form(request.form)
+            assigned_user_id, subject_id = validate_task_relations(values, errors)
+            if not errors:
+                try:
+                    if editing:
+                        affected = crud.update_task(
+                            id=task["id"],
+                            titulo=values["titulo"],
+                            descripcion=values["descripcion"] or None,
+                            fecha_vencimiento=values["fecha_vencimiento"] or None,
+                            estado=values["estado"],
+                            usuario_id=assigned_user_id,
+                            materia_id=subject_id,
+                            prioridad=values["prioridad"],
+                        )
+                        if not affected:
+                            abort(404)
+                        task_id = task["id"]
+                    else:
+                        task_id = crud.create_task(
+                            titulo=values["titulo"],
+                            descripcion=values["descripcion"] or None,
+                            fecha_vencimiento=values["fecha_vencimiento"] or None,
+                            estado=values["estado"],
+                            usuario_id=assigned_user_id,
+                            materia_id=subject_id,
+                            prioridad=values["prioridad"],
+                            creador_id=g.user["id"],
+                        )
+                except sqlite3.IntegrityError:
+                    errors["general"] = (
+                        "No se pudo guardar. Revisa las relaciones de la tarea."
+                    )
+                else:
+                    flash("Tarea actualizada." if editing else "Tarea creada.")
+                    return redirect(url_for("task_detail", task_id=task_id))
+        active_users = []
+        for user in crud.get_all_users():
+            if user["activo"] == 1:
+                active_users.append(user)
+
+        # Mostrar una asignación inactiva histórica sin ofrecerla para nuevas tareas.
+        inactive_assigned = None
+        if editing and task["usuario_id"]:
+            assigned_user = crud.get_user_by_id(task["usuario_id"])
+            if assigned_user and assigned_user["activo"] == 0:
+                inactive_assigned = assigned_user
+
+        status_code = 400 if errors else 200
+        return render_template(
+            "tasks/form.html",
+            values=values,
+            errors=errors,
+            editing=editing,
+            users=active_users,
+            subjects=crud.get_all_subjects(),
+            creator_name=creator_name,
+            inactive_assigned=inactive_assigned,
+        ), status_code
+
+    @app.route("/tasks/new", methods=["GET", "POST"])
+    @admin_required
+    def task_create():
+        return save_task()
+
+    @app.get("/tasks/<int:task_id>")
+    @login_required
+    def task_detail(task_id):
+        task = task_or_404(task_id)
+        return render_template("tasks/detail.html", task=task, values=task, errors={})
+
+    @app.route("/tasks/<int:task_id>/edit", methods=["GET", "POST"])
+    @login_required
+    def task_edit(task_id):
+        task = task_or_404(task_id)
+        if g.user["rol"] == "admin":
+            return save_task(task)
+        values = {"estado": task["estado"]}
+        errors = {}
+        if request.method == "POST":
+            values, errors = validate_task_status(request.form)
+            if not errors:
+                affected = crud.update_task_status(
+                    task_id, g.user["id"], values["estado"]
+                )
+                if not affected:
+                    abort(404)
+                flash("Estado de la tarea actualizado.")
+                return redirect(url_for("task_detail", task_id=task_id))
+        status_code = 400 if errors else 200
+        return render_template(
+            "tasks/detail.html", task=task, values=values, errors=errors
+        ), status_code
+
+    @app.post("/tasks/<int:task_id>/delete")
+    @admin_required
+    def task_delete(task_id):
+        task_or_404(task_id)
+        try:
+            affected = crud.delete_task(task_id)
+            if not affected:
+                abort(404)
+        except sqlite3.IntegrityError:
+            flash(
+                "La tarea tiene pagos o registros asociados. No se puede eliminar."
+            )
+            return redirect(url_for("task_detail", task_id=task_id))
+        flash("Tarea eliminada.")
+        return redirect(url_for("tasks_list"))
+
+    # Pagos: solo administradores pueden consultar y modificar registros.
+
+    @app.get("/payments/")
+    @admin_required
+    def payments_list():
+        return render_template("payments/list.html", payments=crud.get_all_payments())
+
+    def payment_or_404(payment_id):
+        payment = crud.get_payment_by_id(payment_id)
+        if payment is None:
+            abort(404)
+        return payment
+
+    def validate_payment_relations(values, errors):
+        if "tarea_id" not in errors:
+            task = crud.get_task_by_id(int(values["tarea_id"]))
+            if task is None or task["estado"] == "cancelada":
+                errors["tarea_id"] = "Selecciona una tarea existente que no esté cancelada."
+        if "usuario_id" not in errors:
+            recipient = crud.get_user_by_id(int(values["usuario_id"]))
+            if recipient is None or recipient["activo"] != 1:
+                errors["usuario_id"] = "Selecciona un usuario receptor activo existente."
+
+    def save_paid_payment_notes(payment):
+        """Una vez pagado, el formulario solo permite cambiar las notas."""
+        values = {"notas": payment["notas"] or ""}
+        errors = {}
+        if request.method == "POST":
+            values, errors = validate_payment_notes(request.form)
+            if not errors:
+                affected = crud.update_payment_notes(
+                    payment["id"], values["notas"] or None
+                )
+                if not affected:
+                    abort(404)
+                flash("Notas del pago actualizadas.")
+                return redirect(url_for("payment_detail", payment_id=payment["id"]))
+        status_code = 400 if errors else 200
+        return render_template(
+            "payments/form.html", values=values, errors=errors, editing=True,
+            payment=payment, notes_only=True,
+        ), status_code
+
+    def save_payment(payment=None):
+        """Valida, registra o completa un pago sin confiar en fechas del navegador."""
+        editing = payment is not None
+        if editing and payment["estado"] == "anulado":
+            abort(403)
+        if editing and payment["estado"] == "pagado":
+            return save_paid_payment_notes(payment)
+        if editing:
+            values = dict(payment)
+            values["monto"] = format_amount(payment["monto"])
+        else:
+            values = {"estado": "pendiente", "moneda": "", "metodo": ""}
+        errors = {}
+
+        if request.method == "POST":
+            values, errors = validate_payment_form(request.form)
+            validate_payment_relations(values, errors)
+            if not errors:
+                try:
+                    if editing:
+                        affected = crud.update_payment(
+                            payment_id=payment["id"],
+                            usuario_id=int(values["usuario_id"]),
+                            monto_centavos=values["monto_centavos"],
+                            tarea_id=int(values["tarea_id"]),
+                            moneda=values["moneda"],
+                            metodo=values["metodo"],
+                            estado=values["estado"],
+                            notas=values["notas"] or None,
+                        )
+                        if not affected:
+                            abort(404)
+                        payment_id = payment["id"]
+                    else:
+                        payment_id = crud.create_payment(
+                            usuario_id=int(values["usuario_id"]),
+                            monto_centavos=values["monto_centavos"],
+                            tarea_id=int(values["tarea_id"]),
+                            moneda=values["moneda"],
+                            metodo=values["metodo"],
+                            estado=values["estado"],
+                            notas=values["notas"] or None,
+                        )
+                except ValueError as error:
+                    errors["general"] = str(error)
+                except sqlite3.IntegrityError:
+                    errors["general"] = (
+                        "No se pudo guardar. Revisa los datos y sus relaciones."
+                    )
+                else:
+                    flash("Pago actualizado." if editing else "Pago registrado.")
+                    return redirect(url_for("payment_detail", payment_id=payment_id))
+
+        tasks = [task for task in crud.get_all_tasks() if task["estado"] != "cancelada"]
+        users = [user for user in crud.get_all_users() if user["activo"] == 1]
+        status_code = 400 if errors else 200
+        return render_template(
+            "payments/form.html", values=values, errors=errors, editing=editing,
+            payment=payment, notes_only=False, tasks=tasks, users=users,
+        ), status_code
+
+    @app.route("/payments/new", methods=["GET", "POST"])
+    @admin_required
+    def payment_create():
+        return save_payment()
+
+    @app.get("/payments/<int:payment_id>")
+    @admin_required
+    def payment_detail(payment_id):
+        return render_template("payments/detail.html", payment=payment_or_404(payment_id))
+
+    @app.route("/payments/<int:payment_id>/edit", methods=["GET", "POST"])
+    @admin_required
+    def payment_edit(payment_id):
+        return save_payment(payment_or_404(payment_id))
+
+    @app.post("/payments/<int:payment_id>/delete")
+    @admin_required
+    def payment_delete(payment_id):
+        payment_or_404(payment_id)
+        if crud.annul_payment(payment_id):
+            flash("Pago anulado. El registro y su fecha de pago se conservan.")
+        else:
+            flash("El pago ya estaba anulado.")
+        return redirect(url_for("payment_detail", payment_id=payment_id))
+
+    # Comandos de terminal: solo se ejecutan cuando se solicitan explícitamente.
+
+    @app.cli.command("migrate-payments")
+    def migrate_payments_command():
+        """Convierte importes y añade relaciones con respaldo explícito."""
+        try:
+            backup = migrate_payments(get_database_path())
+        except (ValueError, sqlite3.Error) as error:
+            raise click.ClickException(str(error)) from error
+        if backup:
+            click.echo(f"Actualización terminada. Respaldo: {backup}")
+        else:
+            click.echo("Pagos ya está actualizada; no se realizaron cambios.")
+        pending_ids = []
+        for payment in crud.get_all_payments():
+            if payment["pendiente_completar"]:
+                pending_ids.append(str(payment["id"]))
+        if pending_ids:
+            click.echo(
+                "Pagos históricos con información pendiente (ID): "
+                + ", ".join(pending_ids)
+            )
+
+    @app.cli.command("migrate-tasks")
+    def migrate_tasks_command():
+        """Actualiza tareas explícitamente con respaldo previo."""
+        try:
+            backup = migrate_tasks(get_database_path())
+        except (ValueError, sqlite3.Error) as error:
+            raise click.ClickException(str(error)) from error
+        if backup:
+            click.echo(f"Actualización terminada. Respaldo: {backup}")
+        else:
+            click.echo("Tareas ya está actualizada; no se realizaron cambios.")
+
+        pending_ids = []
+        for task in crud.get_all_tasks():
+            if task["creador_id"] is None or task["prioridad"] is None:
+                pending_ids.append(str(task["id"]))
+        if pending_ids:
+            click.echo(
+                "Tareas históricas con información pendiente (ID): "
+                + ", ".join(pending_ids)
+            )
 
     @app.cli.command("init-db")
     def init_db_command():
@@ -195,9 +643,11 @@ def register_routes(app: Flask) -> None:
     @app.cli.command("migrate-users")
     def migrate_users_command():
         """Añade activo con respaldo previo y sin cambiar contraseñas."""
-        backup = migrate(get_database_path())
-        click.echo(f"Actualización terminada. Respaldo: {backup}" if backup
-                   else "La columna activo ya existe; no se realizaron cambios.")
+        backup = migrate_users(get_database_path())
+        if backup:
+            click.echo(f"Actualización terminada. Respaldo: {backup}")
+        else:
+            click.echo("La columna activo ya existe; no se realizaron cambios.")
 
     @app.cli.command("create-admin")
     @click.option("--name", prompt="Nombre")
@@ -205,14 +655,21 @@ def register_routes(app: Flask) -> None:
     @click.password_option(prompt="Contraseña", confirmation_prompt=True)
     def create_admin_command(name, email, password):
         """Crea el primer administrador; la contraseña se solicita sin mostrarla."""
-        values, errors = validate_user_form({"nombre": name, "correo": email,
-                                             "contrasena": password, "rol": "admin"})
+        values, errors = validate_user_form({
+            "nombre": name,
+            "correo": email,
+            "contrasena": password,
+            "rol": "admin",
+        })
         if errors:
             raise click.ClickException(" ".join(errors.values()))
         try:
             crud.create_first_admin(values["nombre"], values["correo"], password)
         except (ValueError, sqlite3.IntegrityError) as error:
-            raise click.ClickException("No se pudo crear el administrador: revisa si ya existe un administrador o el correo está ocupado.") from error
+            raise click.ClickException(
+                "No se pudo crear el administrador: revisa si ya existe "
+                "un administrador o el correo está ocupado."
+            ) from error
         click.echo("Administrador creado. Ya puedes iniciar sesión.")
 
     @app.cli.command("reset-password")
@@ -221,10 +678,19 @@ def register_routes(app: Flask) -> None:
     def reset_password_command(email, password):
         """Restablece explícitamente una clave sin convertir contraseñas históricas."""
         if not 8 <= len(password) <= 128:
-            raise click.ClickException("La contraseña debe tener entre 8 y 128 caracteres.")
+            raise click.ClickException(
+                "La contraseña debe tener entre 8 y 128 caracteres."
+            )
         user = crud.get_user_by_email(email.strip().lower())
         if user is None:
             raise click.ClickException("No existe un usuario con ese correo.")
-        crud.update_user(user["id"], user["nombre"], user["correo"], password,
-                         user["telefono"], user["rol"], activo=user["activo"])
+        crud.update_user(
+            id=user["id"],
+            nombre=user["nombre"],
+            correo=user["correo"],
+            contrasena=password,
+            telefono=user["telefono"],
+            rol=user["rol"],
+            activo=user["activo"],
+        )
         click.echo("Contraseña actualizada; el estado de la cuenta se conserva.")

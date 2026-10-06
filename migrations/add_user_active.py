@@ -18,12 +18,15 @@ def migrate(database_path: Path) -> Path | None:
             raise ValueError("No existe la tabla Usuarios; inicializa primero la base.")
         if "activo" in columns:
             return None
+
+        # El respaldo incluye todas las tablas y conserva las contraseñas originales.
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         backup_path = database_path.with_name(
             f"{database_path.stem}.backup-{stamp}-{uuid.uuid4().hex[:8]}.db"
         )
         with closing(sqlite3.connect(backup_path)) as backup:
             connection.backup(backup)
+
         connection.execute("BEGIN IMMEDIATE")
         connection.execute(
             "ALTER TABLE Usuarios ADD COLUMN activo INTEGER NOT NULL "
@@ -32,7 +35,9 @@ def migrate(database_path: Path) -> Path | None:
         if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("La verificación de integridad falló.")
         if connection.execute("PRAGMA foreign_key_check").fetchone():
-            raise ValueError("Existen relaciones inválidas; se canceló la actualización.")
+            raise ValueError(
+                "Existen relaciones inválidas; se canceló la actualización."
+            )
         connection.commit()
         return backup_path
     except Exception:
@@ -47,5 +52,7 @@ if __name__ == "__main__":
     parser.add_argument("database", type=Path)
     arguments = parser.parse_args()
     backup = migrate(arguments.database)
-    print(f"Actualización terminada. Respaldo: {backup}" if backup
-          else "La columna activo ya existe; no se realizaron cambios.")
+    if backup:
+        print(f"Actualización terminada. Respaldo: {backup}")
+    else:
+        print("La columna activo ya existe; no se realizaron cambios.")

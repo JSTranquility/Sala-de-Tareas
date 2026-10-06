@@ -37,7 +37,8 @@ def index():
 
 Antes de ejecutar `index()`, comprueba si `g.user` contiene un usuario autenticado. Si no existe, redirige al login; si existe, ejecuta la función original.
 
-Se usa en la portada, el cierre de sesión y dentro de `admin_required`.
+Se usa en la portada, el cierre de sesión, las consultas y la edición de tareas,
+y dentro de `admin_required`.
 
 `g.user` contiene los datos del usuario durante la petición actual. La comprobación de que la cuenta existe y sigue activa se realiza previamente en `before_request`.
 
@@ -58,7 +59,10 @@ def admin_required(view):
 
 Si el usuario no es administrador, `abort(403)` detiene la operación y genera una respuesta de acceso denegado.
 
-Protege todas las operaciones de usuarios: listar, crear, ver detalle, editar y eliminar. El rol se obtiene desde la base de datos; no se confía en un rol enviado por el navegador.
+Protege todas las operaciones de usuarios y pagos, y la creación y eliminación de tareas.
+La edición de tareas comprueba el rol dentro de su función: el administrador
+edita el contenido y el miembro solo cambia el estado de su tarea asignada.
+El rol se obtiene desde la base de datos; no se confía en un rol enviado por el navegador.
 
 ## 4. @app.before_request: comprobar cada petición antes de la ruta
 
@@ -78,6 +82,10 @@ En este proyecto realiza estas acciones:
 4. Busca la cuenta en SQLite y comprueba que siga activa y tenga un rol permitido.
 5. Guarda sus datos públicos en `g.user` o limpia la sesión si la cuenta ya no es válida.
 6. Valida el token CSRF en las peticiones que pueden modificar datos.
+
+Para facilitar la lectura, `is_active_user()` reúne las comprobaciones de la
+cuenta y `check_csrf()` realiza la comparación del token. El login también usa
+`is_active_user()` mediante `password_matches()` antes de verificar la contraseña.
 
 Si la función devuelve una respuesta o llama a `abort()`, Flask detiene la petición antes de ejecutar la ruta. Si termina sin devolver una respuesta, Flask continúa.
 
@@ -121,6 +129,10 @@ Se usa para abrir páginas sin modificar datos:
 | `/` | Inicio del usuario autenticado. |
 | `/users/` | Listado de usuarios. |
 | `/users/<int:user_id>` | Detalle de un usuario. |
+| `/tasks/` | Todas las tareas para administradores o las asignadas al miembro. |
+| `/tasks/<int:task_id>` | Detalle de una tarea que el usuario puede consultar. |
+| `/payments/` | Listado de pagos, solo para administradores. |
+| `/payments/<int:payment_id>` | Detalle de un pago. |
 
 ```python
 @app.get("/users/<int:user_id>")
@@ -139,6 +151,8 @@ En el proyecto se usa para:
 
 - `/auth/logout`: cerrar la sesión.
 - `/users/<int:user_id>/delete`: eliminar un usuario.
+- `/tasks/<int:task_id>/delete`: eliminar una tarea, solo para administradores.
+- `/payments/<int:payment_id>/delete`: anular un pago conservando el registro.
 
 ```python
 @app.post("/auth/logout")
@@ -173,6 +187,10 @@ Se utiliza en estas rutas:
 | `/auth/login` | Muestra el acceso. | Verifica credenciales e inicia sesión. |
 | `/users/new` | Muestra el formulario de alta. | Crea el usuario. |
 | `/users/<int:user_id>/edit` | Muestra los datos actuales. | Guarda los cambios. |
+| `/tasks/new` | Muestra el formulario de tarea. | Crea la tarea como administrador. |
+| `/tasks/<int:task_id>/edit` | Muestra la edición permitida. | Guarda contenido como administrador o estado como miembro. |
+| `/payments/new` | Muestra el formulario de pago. | Registra un pago. |
+| `/payments/<int:payment_id>/edit` | Muestra el formulario permitido por su estado. | Edita pendientes o las notas de pagados. |
 
 La función puede distinguir ambos casos mediante `request.method`.
 
@@ -184,6 +202,8 @@ Estos comandos se ejecutan desde la terminal, no desde una dirección web.
 | --- | --- |
 | `@app.cli.command("init-db")` | Crea las tablas faltantes. No actualiza tablas existentes. |
 | `@app.cli.command("migrate-users")` | Añade `activo` mediante una actualización explícita con respaldo previo. |
+| `@app.cli.command("migrate-tasks")` | Actualiza tareas con respaldo y conserva la información histórica. |
+| `@app.cli.command("migrate-payments")` | Convierte importes a centavos con respaldo y señala datos históricos pendientes. |
 | `@app.cli.command("create-admin")` | Crea el primer administrador activo. |
 | `@app.cli.command("reset-password")` | Restablece una contraseña guardando su hash. |
 

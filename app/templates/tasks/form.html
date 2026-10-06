@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Editar tarea' if editing else 'Crear tarea' }}</h2>
+{% if errors.get('general') %}
+    <p class="error" role="alert">{{ errors.general }}</p>
+{% endif %}
+<form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="titulo">Título</label>
+    <input id="titulo" name="titulo" maxlength="200"
+           value="{{ values.get('titulo') or '' }}" required
+           {% if errors.get('titulo') %}
+               aria-invalid="true" aria-describedby="titulo-error"
+           {% endif %}>
+    {% if errors.get('titulo') %}
+        <p id="titulo-error" class="error">{{ errors.titulo }}</p>
+    {% endif %}
+
+    <label for="descripcion">Descripción (opcional)</label>
+    <textarea id="descripcion" name="descripcion" maxlength="5000"
+              {% if errors.get('descripcion') %}
+                  aria-invalid="true" aria-describedby="descripcion-error"
+              {% endif %}>{{ values.get('descripcion') or '' }}</textarea>
+    {% if errors.get('descripcion') %}
+        <p id="descripcion-error" class="error">{{ errors.descripcion }}</p>
+    {% endif %}
+
+    <label for="estado">Estado</label>
+    <select id="estado" name="estado" required
+            {% if errors.get('estado') %}
+                aria-invalid="true" aria-describedby="estado-error"
+            {% endif %}>
+        {% if not values.get('estado') %}
+            <option value="" selected>Seleccionar estado</option>
+        {% endif %}
+        {% for value, caption in task_states.items() %}
+            <option value="{{ value }}" {% if values.get('estado') == value %}selected{% endif %}>
+                {{ caption }}
+            </option>
+        {% endfor %}
+    </select>
+    {% if errors.get('estado') %}
+        <p id="estado-error" class="error">{{ errors.estado }}</p>
+    {% endif %}
+
+    <label for="prioridad">Prioridad</label>
+    <select id="prioridad" name="prioridad" required
+            {% if errors.get('prioridad') %}
+                aria-invalid="true" aria-describedby="prioridad-error"
+            {% endif %}>
+        {% if not values.get('prioridad') %}
+            <option value="" selected>Seleccionar prioridad</option>
+        {% endif %}
+        {% for value, caption in task_priorities.items() %}
+            <option value="{{ value }}" {% if values.get('prioridad') == value %}selected{% endif %}>
+                {{ caption }}
+            </option>
+        {% endfor %}
+    </select>
+    {% if errors.get('prioridad') %}
+        <p id="prioridad-error" class="error">{{ errors.prioridad }}</p>
+    {% endif %}
+
+    <label for="fecha_vencimiento">Vencimiento (opcional)</label>
+    <input id="fecha_vencimiento" name="fecha_vencimiento" type="date"
+           value="{{ values.get('fecha_vencimiento') or '' }}"
+           {% if errors.get('fecha_vencimiento') %}
+               aria-invalid="true" aria-describedby="fecha_vencimiento-error"
+           {% endif %}>
+    {% if errors.get('fecha_vencimiento') %}
+        <p id="fecha_vencimiento-error" class="error">{{ errors.fecha_vencimiento }}</p>
+    {% endif %}
+
+    <label for="usuario_asignado_id">Usuario asignado (opcional)</label>
+    <p id="asignacion-ayuda">Es la persona que realizará la tarea. El creador se registra por separado.</p>
+    <select id="usuario_asignado_id" name="usuario_asignado_id"
+            {% if errors.get('usuario_asignado_id') %}
+                aria-invalid="true"
+                aria-describedby="asignacion-ayuda usuario_asignado_id-error"
+            {% else %}
+                aria-describedby="asignacion-ayuda"
+            {% endif %}>
+        <option value="">Sin asignar</option>
+        {% if inactive_assigned %}
+            <option value="{{ inactive_assigned.id }}"
+                    {% if values.get('usuario_asignado_id')|string == inactive_assigned.id|string %}selected{% endif %}>
+                {{ inactive_assigned.nombre }} (inactivo; selecciona otro usuario o deja sin asignar)
+            </option>
+        {% endif %}
+        {% for user in users %}
+            <option value="{{ user.id }}"
+                    {% if values.get('usuario_asignado_id')|string == user.id|string %}selected{% endif %}>
+                {{ user.nombre }} — {{ user.correo }}
+            </option>
+        {% endfor %}
+    </select>
+    {% if errors.get('usuario_asignado_id') %}
+        <p id="usuario_asignado_id-error" class="error">{{ errors.usuario_asignado_id }}</p>
+    {% endif %}
+
+    <label for="materia_id">Materia (opcional)</label>
+    <select id="materia_id" name="materia_id"
+            {% if errors.get('materia_id') %}
+                aria-invalid="true" aria-describedby="materia_id-error"
+            {% endif %}>
+        <option value="">Sin materia</option>
+        {% for subject in subjects %}
+            <option value="{{ subject.id }}"
+                    {% if values.get('materia_id')|string == subject.id|string %}selected{% endif %}>
+                {{ subject.nombre }}
+            </option>
+        {% endfor %}
+    </select>
+    {% if errors.get('materia_id') %}
+        <p id="materia_id-error" class="error">{{ errors.materia_id }}</p>
+    {% endif %}
+
+    <p>
+        Creado por: {{ creator_name or 'No consta (tarea histórica)' }}.
+        {% if editing %}
+            La autoría se conserva al editar.
+        {% else %}
+            Se registra automáticamente con tu cuenta.
+        {% endif %}
+    </p>
+    <div class="actions">
+        <button type="submit">Guardar tarea</button>
+        <a href="{{ url_for('tasks_list') }}">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
