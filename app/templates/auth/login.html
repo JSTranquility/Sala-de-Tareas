@@ -1,21 +1,32 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
+{% from "ui.html" import icon %}
 {% block title %}Iniciar sesión — Sala de Tareas{% endblock %}
+{% block main_class %}login-layout{% endblock %}
 {% block content %}
-<h2>Iniciar sesión</h2>
-{% if error %}
-    <p class="error" role="alert">{{ error }}</p>
-{% endif %}
-<form method="post">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="correo">Correo</label>
-    <input id="correo" name="correo" type="email" maxlength="120"
-           autocomplete="username" value="{{ email }}" required>
-    <label for="contrasena">Contraseña</label>
-    <input id="contrasena" name="contrasena" type="password" maxlength="128"
-           autocomplete="current-password" required>
-    <div class="actions">
-        <button type="submit">Entrar</button>
+<section class="login-story">
+    <div>
+        <span class="eyebrow">UN POCO DE ORDEN. MUCHAS POSIBILIDADES.</span>
+        <h2>Lo importante,<br>en su lugar.</h2>
+        <p>Un espacio sencillo para organizar tareas, acompañar a tu equipo y seguir cada avance.</p>
     </div>
-</form>
-<p>Si necesitas una cuenta o recuperar el acceso, contacta con la persona administradora.</p>
+    <div class="story-card" aria-hidden="true">
+        <div>{{ icon('check') }}<strong>Un paso más, una tarea menos.</strong></div>
+        <small>Así se construyen los grandes proyectos.</small>
+    </div>
+</section>
+<section class="login-card">
+    <span class="eyebrow">QUÉ BUENO TENERTE AQUÍ</span>
+    <h2>Iniciar sesión</h2>
+    <p>Entra a tu espacio y continúa donde lo dejaste.</p>
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="correo">Correo</label>
+        <input id="correo" name="correo" type="email" maxlength="120" autocomplete="username" value="{{ email }}" placeholder="tu@correo.com" required>
+        <label for="contrasena">Contraseña</label>
+        <input id="contrasena" name="contrasena" type="password" maxlength="128" autocomplete="current-password" placeholder="Tu contraseña" required>
+        <div class="actions"><button type="submit">Entrar {{ icon('arrow') }}</button></div>
+    </form>
+    <p class="login-help">Si necesitas una cuenta o recuperar el acceso, contacta con la persona administradora.</p>
+</section>
 {% endblock %}

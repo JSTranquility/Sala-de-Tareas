@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<span class="eyebrow">DALE FORMA AL SIGUIENTE PASO</span>
 <h2>{{ 'Editar tarea' if editing else 'Crear tarea' }}</h2>
 {% if errors.get('general') %}
     <p class="error" role="alert">{{ errors.general }}</p>
@@ -99,6 +100,8 @@
     {% endif %}
 
     <label for="materia_id">Materia (opcional)</label>
+    <p class="help"><a href="{{ url_for('subject_create') }}" target="_blank" rel="noopener">Crear materia en otra pestaña</a>. Después de guardarla, recarga este formulario para seleccionarla; conserva primero los datos que hayas escrito.</p>
+    {% if not subjects %}<p class="help">Todavía no hay materias. Crea una o guarda la tarea sin materia.</p>{% endif %}
     <select id="materia_id" name="materia_id"
             {% if errors.get('materia_id') %}
                 aria-invalid="true" aria-describedby="materia_id-error"

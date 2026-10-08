@@ -1,139 +1,59 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Sala de Tareas{% endblock %}</title>
-    <style>
-        /* Estructura de las páginas */
-        body {
-            font-family: system-ui, sans-serif;
-            color: #172c3b;
-            background: #f4f7f9;
-            margin: 0;
-        }
-        header, main {
-            max-width: 960px;
-            margin: auto;
-            padding: 1.5rem;
-        }
-        header {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 1rem;
-        }
-        header h1 {
-            margin-right: auto;
-            font-size: 1.4rem;
-        }
-        a {
-            color: #075b92;
-        }
-        nav {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-        main {
-            background: white;
-            border-radius: 12px;
-        }
-
-        /* Formularios y botones */
-        label {
-            display: block;
-            margin: 1rem 0 .3rem;
-        }
-        input, select, textarea, button {
-            font: inherit;
-            padding: .6rem;
-            box-sizing: border-box;
-        }
-        input, select, textarea {
-            width: 100%;
-            max-width: 460px;
-            border: 1px solid #8496a1;
-            border-radius: 5px;
-        }
-        textarea {
-            min-height: 140px;
-            resize: vertical;
-        }
-        button {
-            cursor: pointer;
-            border-radius: 5px;
-            border: 1px solid #075b92;
-            background: #075b92;
-            color: white;
-        }
-        .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-            align-items: center;
-            margin-top: 1.5rem;
-        }
-
-        /* Mensajes y presentación de datos */
-        .error {
-            color: #9c2020;
-        }
-        .message {
-            padding: .8rem;
-            background: #e8f2fa;
-        }
-        .table-scroll {
-            overflow-x: auto;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            padding: .8rem;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        dt {
-            font-weight: bold;
-            margin-top: 1rem;
-        }
-        dd {
-            margin: .3rem 0;
-            overflow-wrap: anywhere;
-        }
-        .description {
-            white-space: pre-wrap;
-        }
-    </style>
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
-<body>
-    <header>
-        <h1>Sala de Tareas</h1>
-        {% if g.user %}
-        <nav aria-label="Navegación principal">
-            <a href="{{ url_for('index') }}">Inicio</a>
-            <a href="{{ url_for('tasks_list') }}">
-                {{ 'Tareas' if g.user.rol == 'admin' else 'Mis tareas' }}
-            </a>
-            {% if g.user.rol == 'admin' %}
-                <a href="{{ url_for('users_list') }}">Usuarios</a>
-                <a href="{{ url_for('payments_list') }}">Pagos</a>
-            {% endif %}
-            <form method="post" action="{{ url_for('logout') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit">Cerrar sesión</button>
-            </form>
-        </nav>
+<body class="{{ 'workspace' if g.user else 'guest' }}">
+{% from 'ui.html' import icon %}
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+{% if g.user %}
+<aside class="sidebar">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="Sala de Tareas, inicio">
+        <span class="brand-mark">{{ icon('check') }}</span>
+        <span>Sala de Tareas<small>UN ESPACIO PARA AVANZAR</small></span>
+    </a>
+    <p class="nav-caption">TU ESPACIO</p>
+    <nav class="main-nav" aria-label="Navegación principal">
+        <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>{{ icon('grid') }}<span>Inicio</span></a>
+        <a href="{{ url_for('tasks_list') }}" {% if (request.endpoint or '').startswith('task') %}aria-current="page"{% endif %}>{{ icon('tasks') }}<span>{{ 'Tareas' if g.user.rol == 'admin' else 'Mis tareas' }}</span></a>
+        {% if g.user.rol == 'admin' %}
+        <a href="{{ url_for('subjects_list') }}" {% if (request.endpoint or '').startswith('subject') %}aria-current="page"{% endif %}>{{ icon('tasks') }}<span>Materias</span></a>
+        <a href="{{ url_for('users_list') }}" {% if (request.endpoint or '').startswith('user') %}aria-current="page"{% endif %}>{{ icon('users') }}<span>Usuarios</span></a>
+        <a href="{{ url_for('payments_list') }}" {% if (request.endpoint or '').startswith('payment') %}aria-current="page"{% endif %}>{{ icon('wallet') }}<span>Pagos</span></a>
         {% endif %}
-    </header>
-    <main>
+    </nav>
+    <div class="sidebar-note"><span class="status-dot"></span>Proyecto educativo<small>Organiza. Colabora. Avanza.</small></div>
+    <div class="account">
+        <span class="avatar">{{ g.user.nombre[:1]|upper }}</span>
+        <div><strong>{{ g.user.nombre }}</strong><small>{{ 'Administrador' if g.user.rol == 'admin' else 'Miembro' }}</small></div>
+    </div>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="logout-button">{{ icon('exit') }} Cerrar sesión</button>
+    </form>
+</aside>
+{% else %}
+<header class="guest-header">
+    <a class="brand" href="{{ url_for('login') }}"><span class="brand-mark">{{ icon('check') }}</span><span>Sala de Tareas<small>UN ESPACIO PARA AVANZAR</small></span></a>
+    <div class="topbar-actions"><span class="guest-label">Proyecto educativo · Python</span>{% include 'theme_toggle.html' %}</div>
+</header>
+{% endif %}
+<div class="main-shell">
+    {% if g.user %}
+    <header class="topbar"><span>Tu equipo, en un solo lugar.</span><div class="topbar-actions"><span class="role-pill">{{ 'Administración' if g.user.rol == 'admin' else 'Mi espacio' }}</span>{% include 'theme_toggle.html' %}</div></header>
+    {% endif %}
+    <main id="contenido" tabindex="-1" class="{% block main_class %}page-content{% endblock %}">
         {% for message in get_flashed_messages() %}
-            <p class="message" role="status">{{ message }}</p>
+        <div class="message" role="status">{{ icon('info') }}<span>{{ message }}</span></div>
         {% endfor %}
         {% block content %}{% endblock %}
     </main>
+    <footer class="page-footer"><span>Sala de Tareas</span><span>Hecho para aprender y trabajar en equipo.</span></footer>
+</div>
+<script src="{{ url_for('static', filename='js/task_rows.js') }}" defer></script>
 </body>
 </html>

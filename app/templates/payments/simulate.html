@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "ui.html" import icon %}
+{% block content %}
+<span class="eyebrow">APRENDER HACIENDO</span>
+<h2>Simular pago con PayPal</h2>
+<p class="message">Simulación educativa: no se realiza ningún cobro. No introduzcas datos de cuentas ni tarjetas.</p>
+<dl>
+    <dt>Referencia ficticia</dt><dd>SIM-PAGO-{{ payment.id }}</dd>
+    <dt>Tarea</dt><dd>{{ payment.tarea_titulo or 'Pendiente de completar' }}</dd>
+    <dt>Usuario receptor</dt><dd>{{ payment.receptor_nombre }}</dd>
+    <dt>Importe</dt><dd>{{ payment.moneda or 'Sin moneda' }} {{ payment.monto|amount }}</dd>
+</dl>
+{% if can_simulate %}
+<p>Elige el resultado del ejercicio. Aprobar guarda el pago como pagado con una nota educativa; rechazar o cancelar lo conserva pendiente.</p>
+<form method="post" class="simulation-choice">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" name="resultado" value="aprobado">{{ icon('check') }} Aprobar</button>
+    <button class="button-danger" type="submit" name="resultado" value="rechazado">Rechazar</button>
+    <button class="button-secondary" type="submit" name="resultado" value="cancelado">Cancelar</button>
+</form>
+{% endif %}
+<p><a href="{{ url_for('payment_detail', payment_id=payment.id) }}">Volver al detalle</a></p>
+{% endblock %}

@@ -1,14 +1,57 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
+{% from "ui.html" import icon %}
 {% block content %}
-<h2>Bienvenido, {{ g.user.nombre }}</h2>
-<p>Organiza las tareas de tu equipo y sus pagos en un solo lugar.</p>
-{% if g.user.rol == 'admin' %}
-    <p><a href="{{ url_for('users_list') }}">Gestionar usuarios</a></p>
-    <p><a href="{{ url_for('payments_list') }}">Gestionar pagos</a></p>
+<section class="hero">
+    <span class="eyebrow">MENOS RUIDO, MÁS CLARIDAD</span>
+    <h2>Bienvenido, {{ g.user.nombre }}.</h2>
+    <p>Organiza las tareas de tu equipo y sus pagos en un solo lugar. Todo listo para dar el siguiente paso.</p>
+    <a class="button" href="{{ url_for('task_create') if g.user.rol == 'admin' else url_for('tasks_list') }}">{{ icon('plus') if g.user.rol == 'admin' else icon('arrow') }}{{ 'Crear tarea' if g.user.rol == 'admin' else 'Consultar mis tareas' }}</a>
+</section>
+<section class="panel">
+    <div class="panel-heading">
+        <h3>{{ 'Resumen de tareas' if g.user.rol == 'admin' else 'Resumen de mis tareas' }}</h3>
+        <span class="results-meta">{{ dashboard.total }} tareas en total.</span>
+    </div>
+    <dl class="summary">
+        {% for state, label in task_states.items() %}
+        <div class="metric-{{ state }}"><dt><a href="{{ url_for('tasks_list', estado=state) }}">{{ label }}</a></dt><dd>{{ dashboard.states.get(state, 0) }}</dd></div>
+        {% endfor %}
+    </dl>
+    <div class="deadline-row">
+        <div class="deadline">{{ icon('clock') }}<span>Vencidas</span><strong>{{ dashboard.overdue }}</strong></div>
+        <div class="deadline">{{ icon('clock') }}<span>Próximas a vencer</span><strong>{{ dashboard.upcoming }}</strong></div>
+    </div>
+    <p class="help">Fecha de referencia: {{ dashboard.today }} (UTC). Próximas: desde hoy hasta dentro de 3 días. Solo se consideran vencimientos de tareas pendientes o en progreso.</p>
+</section>
+{% if dashboard.payments is not none %}
+<section class="panel">
+    <div class="panel-heading"><h3>Resumen de pagos</h3><a href="{{ url_for('payments_list') }}">Ver todos {{ icon('arrow') }}</a></div>
+    <div class="table-scroll">
+        <table>
+            <thead><tr><th>Moneda</th><th>Pendientes</th><th>Pagados</th></tr></thead>
+            <tbody>
+            {% for currency, totals in dashboard.payments.items() %}
+                <tr>
+                    <td><strong>{{ currency }}</strong></td>
+                    <td><a href="{{ url_for('payments_list', moneda=currency, estado='pendiente') }}">{{ totals.pendiente.count }} pagos</a><br><span class="money">{{ currency }} {{ totals.pendiente.amount|amount }}</span></td>
+                    <td><a href="{{ url_for('payments_list', moneda=currency, estado='pagado') }}">{{ totals.pagado.count }} pagos</a><br><span class="money">{{ currency }} {{ totals.pagado.amount|amount }}</span></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="help">Los totales incluyen los ejercicios de pago simulados. No representan cobros bancarios verificados. Los pagos anulados se excluyen de estos totales.</p>
+    {% if dashboard.incomplete_payments %}
+    <p class="message">{{ dashboard.incomplete_payments }} pagos con información pendiente, excluidos de los importes del resumen. <a href="{{ url_for('payments_list') }}">Revisar pagos</a></p>
+    {% endif %}
+</section>
 {% endif %}
-<p>
-    <a href="{{ url_for('tasks_list') }}">
-        {{ 'Gestionar tareas' if g.user.rol == 'admin' else 'Consultar mis tareas' }}
-    </a>
-</p>
+<h3>Tu siguiente paso</h3>
+<div class="quick-links">
+    <a class="quick-link" href="{{ url_for('tasks_list') }}">{{ 'Gestionar tareas' if g.user.rol == 'admin' else 'Consultar mis tareas' }}{{ icon('arrow') }}</a>
+    {% if g.user.rol == 'admin' %}
+    <a class="quick-link" href="{{ url_for('users_list') }}">Gestionar usuarios{{ icon('arrow') }}</a>
+    <a class="quick-link" href="{{ url_for('payments_list') }}">Gestionar pagos{{ icon('arrow') }}</a>
+    {% endif %}
+</div>
 {% endblock %}

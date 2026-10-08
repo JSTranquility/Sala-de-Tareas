@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-heading"><div><h2>Materias</h2><p>Organiza las materias disponibles para tus tareas.</p></div><a class="button" href="{{ url_for('subject_create') }}">Crear materia</a></div>
+{% if subjects %}
+<div class="table-scroll"><table><thead><tr><th>Nombre</th><th>Descripción</th><th>Acciones</th></tr></thead><tbody>
+{% for subject in subjects %}<tr><td><a href="{{ url_for('subject_detail', subject_id=subject.id) }}">{{ subject.nombre }}</a></td><td>{{ subject.descripcion or 'Sin descripción' }}</td><td><a href="{{ url_for('subject_edit', subject_id=subject.id) }}">Editar</a></td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="empty-state"><h3>Aún no hay materias</h3><p>Crea una para poder seleccionarla al crear tareas.</p></div>{% endif %}
+{% endblock %}

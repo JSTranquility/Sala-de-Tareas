@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ subject.nombre }}</h2>
+<dl><dt>Descripción</dt><dd class="description">{{ subject.descripcion or 'Sin descripción' }}</dd><dt>Fecha de creación</dt><dd>{{ subject.fecha_creacion or 'No consta' }}</dd></dl>
+<div class="actions"><a class="button" href="{{ url_for('subject_edit', subject_id=subject.id) }}">Editar materia</a><a href="{{ url_for('task_create') }}">Crear tarea</a><a href="{{ url_for('subjects_list') }}">Volver a materias</a></div>
+<form method="post" action="{{ url_for('subject_delete', subject_id=subject.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><p class="help">Solo se puede eliminar si no tiene tareas asociadas.</p><button class="danger" type="submit">Eliminar materia</button></form>
+{% endblock %}

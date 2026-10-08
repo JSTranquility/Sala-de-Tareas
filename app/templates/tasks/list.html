@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "ui.html" import icon, badge %}
 {% block content %}
-<h2>{{ 'Tareas' if g.user.rol == 'admin' else 'Mis tareas' }}</h2>
-{% if g.user.rol == 'admin' %}
-    <p><a href="{{ url_for('task_create') }}">Crear tarea</a></p>
-{% endif %}
+<div class="page-heading">
+    <div><span class="eyebrow">UN PASO A LA VEZ</span><h2>{{ 'Tareas' if g.user.rol == 'admin' else 'Mis tareas' }}</h2><p>El trabajo por hacer y cada avance, a la vista.</p></div>
+    {% if g.user.rol == 'admin' %}<a class="button" href="{{ url_for('task_create') }}">{{ icon('plus') }}Crear tarea</a>{% endif %}
+</div>
+{% include "list_filters.html" %}
 {% if tasks %}
 <div class="table-scroll">
     <table>
@@ -14,30 +16,29 @@
                 <th>Prioridad</th>
                 <th>Vencimiento</th>
                 <th>Usuario asignado</th>
+                <th>Detalle</th>
             </tr>
         </thead>
         <tbody>
         {% for task in tasks %}
-            <tr>
+            <tr class="task-row" data-task-url="{{ url_for('task_detail', task_id=task.id) }}">
                 <td>
                     <a href="{{ url_for('task_detail', task_id=task.id) }}">
                         {{ task.titulo }}
                     </a>
                 </td>
-                <td>{{ task_states.get(task.estado, task.estado) }}</td>
-                <td>{{ task_priorities.get(task.prioridad, 'Sin especificar') }}</td>
+                <td>{{ badge(task.estado, task_states.get(task.estado, task.estado)) }}</td>
+                <td>{{ badge(task.prioridad, task_priorities.get(task.prioridad, 'Sin especificar')) }}</td>
                 <td>{{ task.fecha_vencimiento or 'Sin vencimiento' }}</td>
                 <td>{{ task.usuario_asignado_nombre or 'Sin asignar' }}</td>
+                <td><a href="{{ url_for('task_detail', task_id=task.id) }}">Ver detalle</a></td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
 {% else %}
-    {% if g.user.rol == 'admin' %}
-        <p>Todavía no hay tareas.</p>
-    {% else %}
-        <p>No tienes tareas asignadas.</p>
-    {% endif %}
+    <div class="empty-state">{{ icon('tasks') }}<h3>Un espacio para tu próximo paso</h3><p>No hay tareas que coincidan con la búsqueda y los filtros.</p></div>
 {% endif %}
+{% include "pagination.html" %}
 {% endblock %}

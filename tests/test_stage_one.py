@@ -65,6 +65,14 @@ class StageOneTests(unittest.TestCase):
                     pass
         self.assertFalse(self.database_path.exists())
 
+    def test_local_styles_are_served_without_database(self):
+        response = app.test_client().get("/static/styles.css")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/css")
+        self.assertIn(b"--canvas", response.data)
+        response.close()
+        self.assertFalse(self.database_path.exists())
+
     def test_explicit_initialization_preserves_existing_records(self):
         self.initialize()
         with app.app_context(), get_connection() as connection:

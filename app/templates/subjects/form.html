@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Editar materia' if editing else 'Crear materia' }}</h2>
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% for field, label, limit in [('nombre', 'Nombre', 120), ('descripcion', 'Descripción (opcional)', 2000)] %}
+<label for="{{ field }}">{{ label }}</label>
+{% if field == 'nombre' %}<input id="{{ field }}" name="{{ field }}" required maxlength="{{ limit }}" value="{{ values.get(field) or '' }}" {% if errors.get(field) %}aria-invalid="true" aria-describedby="{{ field }}-error"{% endif %}>
+{% else %}<textarea id="{{ field }}" name="{{ field }}" maxlength="{{ limit }}" rows="4" {% if errors.get(field) %}aria-invalid="true" aria-describedby="{{ field }}-error"{% endif %}>{{ values.get(field) or '' }}</textarea>{% endif %}
+{% if errors.get(field) %}<p class="error" id="{{ field }}-error">{{ errors[field] }}</p>{% endif %}
+{% endfor %}
+<div class="actions"><button type="submit">Guardar materia</button><a href="{{ url_for('subjects_list') }}">Cancelar</a></div>
+</form>
+{% endblock %}

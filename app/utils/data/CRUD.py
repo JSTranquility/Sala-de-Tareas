@@ -5,7 +5,7 @@ Consultar devuelve dict, None o lista. Los errores sqlite3 se propagan después 
 rollback: IntegrityError para restricciones y OperationalError para fallos de acceso.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sqlite3
 from typing import Any
 
@@ -76,6 +76,91 @@ def _fetch_all(sql: str, parameters: tuple = ()) -> list[dict[str, Any]]:
 def _current_utc_time() -> str:
     """Devuelve la fecha y hora UTC usada para registrar tareas y pagos."""
     return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+
+
+def get_filtered_page(entity: str, query: str, filters: dict[str, str],
+                      page: int, assigned_user_id: int | None = None) -> dict:
+    """Consulta listados paginados usando solo columnas y SQL predefinidos."""
+    sources = {
+        "tasks": (TASK_SELECT, "task.id", {
+            "estado": "task.estado", "prioridad": "task.prioridad",
+        }, ("task.titulo", "task.descripcion", "assigned_user.nombre")),
+        "payments": (PAYMENT_SELECT, "payment.id", {
+            "estado": "payment.estado", "moneda": "payment.moneda",
+            "metodo": "payment.metodo",
+        }, ("task.titulo", "recipient.nombre", "payment.notas")),
+        "users": (f"SELECT {USER_FIELDS} FROM Usuarios", "id", {
+            "rol": "rol", "activo": "activo",
+        }, ("nombre", "correo")),
+    }
+    select, order, columns, search_columns = sources[entity]
+    conditions, parameters = [], []
+    if assigned_user_id is not None:
+        if entity != "tasks":
+            raise ValueError("La restricción de asignación solo se aplica a tareas.")
+        conditions.append("task.usuario_id = ?")
+        parameters.append(assigned_user_id)
+    if query:
+        conditions.append("(" + " OR ".join(
+            f"instr(lower(COALESCE({column}, '')), lower(?)) > 0"
+            for column in search_columns
+        ) + ")")
+        parameters.extend([query] * len(search_columns))
+    for name, value in filters.items():
+        if value:
+            conditions.append(f"{columns[name]} = ?")
+            parameters.append(value)
+    where = " WHERE " + " AND ".join(conditions) if conditions else ""
+    with get_connection() as connection:
+        total = connection.execute(
+            "SELECT COUNT(*) FROM (" + select + where + ")", parameters
+        ).fetchone()[0]
+        pages = max(1, (total + 9) // 10)
+        page = min(max(1, page), pages)
+        rows = connection.execute(
+            select + where + f" ORDER BY {order} LIMIT ? OFFSET ?",
+            [*parameters, 10, (page - 1) * 10],
+        ).fetchall()
+    return {"items": [dict(row) for row in rows], "total": total,
+            "page": page, "pages": pages}
+
+
+def get_dashboard(assigned_user_id: int | None = None) -> dict:
+    """Cuenta tareas por estado y vencimiento; pagos solo para administración."""
+    today = datetime.now(timezone.utc).date()
+    end = today + timedelta(days=3)
+    where = " WHERE usuario_id = ?" if assigned_user_id is not None else ""
+    parameters = (assigned_user_id,) if assigned_user_id is not None else ()
+    with get_connection() as connection:
+        states = {row["estado"]: row["total"] for row in connection.execute(
+            "SELECT estado, COUNT(*) AS total FROM Tareas" + where + " GROUP BY estado",
+            parameters,
+        )}
+        dates = connection.execute(
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN date(fecha_vencimiento) < ? THEN 1 ELSE 0 END), 0) AS vencidas, "
+            "COALESCE(SUM(CASE WHEN date(fecha_vencimiento) BETWEEN ? AND ? THEN 1 ELSE 0 END), 0) AS proximas "
+            "FROM Tareas WHERE estado IN ('pendiente', 'en_progreso')" +
+            (" AND usuario_id = ?" if assigned_user_id is not None else ""),
+            (today.isoformat(), today.isoformat(), end.isoformat(), *parameters),
+        ).fetchone()
+        payments = None
+        incomplete = 0
+        if assigned_user_id is None:
+            payments = {currency: {state: {"count": 0, "amount": 0}
+                                   for state in ("pendiente", "pagado")}
+                        for currency in PAYMENT_CURRENCIES}
+            for row in connection.execute(PAYMENT_SELECT):
+                if row["pendiente_completar"] or not row["fecha_creacion"]:
+                    incomplete += 1
+                elif row["estado"] in ("pendiente", "pagado"):
+                    bucket = payments[row["moneda"]][row["estado"]]
+                    bucket["count"] += 1
+                    bucket["amount"] += row["monto"]
+    return {"states": states, "total": sum(states.values()),
+            "overdue": dates["vencidas"], "upcoming": dates["proximas"],
+            "today": today.isoformat(), "payments": payments,
+            "incomplete_payments": incomplete}
 
 
 # Usuarios
@@ -236,17 +321,17 @@ def get_tasks_by_user(usuario_id: int) -> list[dict[str, Any]]:
     )
 
 
-# Materias: se conservan las operaciones existentes.
+# Materias: operaciones sobre el esquema existente.
 
 
 def get_all_subjects() -> list[dict[str, Any]]:
-    """Lista materias existentes para conservar la relación al editar tareas."""
-    return _fetch_all("SELECT id, nombre FROM Materias ORDER BY nombre, id")
+    """Lista materias por nombre para su gestión y selección en tareas."""
+    return _fetch_all("SELECT * FROM Materias ORDER BY nombre, id")
 
 
 def get_subject_by_id(subject_id: int) -> dict[str, Any] | None:
-    """Consulta una materia existente sin ampliar su gestión."""
-    return _fetch_one("SELECT id, nombre FROM Materias WHERE id = ?", (subject_id,))
+    """Devuelve una materia con su descripción y fecha de creación."""
+    return _fetch_one("SELECT * FROM Materias WHERE id = ?", (subject_id,))
 
 
 def create_subject(nombre: str, descripcion: str | None) -> int:
@@ -255,6 +340,17 @@ def create_subject(nombre: str, descripcion: str | None) -> int:
         "INSERT INTO Materias (nombre, descripcion) VALUES (?, ?)",
         (nombre, descripcion),
     )
+
+
+def update_subject(subject_id: int, nombre: str, descripcion: str | None) -> int:
+    """Actualiza una materia sin alterar sus tareas asociadas."""
+    return _modify("UPDATE Materias SET nombre = ?, descripcion = ? WHERE id = ?",
+                   (nombre, descripcion, subject_id))
+
+
+def delete_subject(subject_id: int) -> int:
+    """Elimina materias sin tareas; las claves foráneas protegen las vinculadas."""
+    return _modify("DELETE FROM Materias WHERE id = ?", (subject_id,))
 
 
 # Pagos: monto representa centavos en la moneda indicada en cada registro.
@@ -331,6 +427,31 @@ def update_payment(payment_id: int, usuario_id: int, monto_centavos: int,
             "metodo = ?, estado = ?, fecha_pago = ?, notas = ? WHERE id = ?",
             (usuario_id, monto_centavos, tarea_id, moneda, metodo,
              estado, paid_at, notas, payment_id),
+        ).rowcount
+
+
+def mark_payment_paid(payment_id: int) -> int:
+    """Confirma un ejercicio local una sola vez, conservando evidencia educativa."""
+    with get_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        payment = connection.execute(
+            "SELECT * FROM Pagos WHERE id = ?", (payment_id,)
+        ).fetchone()
+        if payment is None or payment["estado"] != "pendiente":
+            return 0
+        marker = f"Simulación educativa de PayPal: SIM-PAGO-{payment_id}. Sin cobro real."
+        notes = "\n".join(filter(None, (payment["notas"], marker)))
+        validate_payment_data(
+            connection, payment["usuario_id"], payment["monto"],
+            payment["tarea_id"], payment["moneda"], payment["metodo"],
+            "pagado", notes,
+        )
+        if not payment["fecha_creacion"]:
+            raise ValueError("Completa los datos históricos antes de simular el pago.")
+        return connection.execute(
+            "UPDATE Pagos SET estado = 'pagado', fecha_pago = ?, notas = ? "
+            "WHERE id = ? AND estado = 'pendiente'",
+            (_current_utc_time(), notes, payment_id),
         ).rowcount
 
 

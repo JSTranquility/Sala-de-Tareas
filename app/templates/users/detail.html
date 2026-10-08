@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "ui.html" import badge %}
 {% block content %}
+<span class="eyebrow">PERFIL DEL EQUIPO</span>
 <h2>{{ user.nombre }}</h2>
 <dl>
     <dt>Correo</dt>
@@ -7,9 +9,9 @@
     <dt>Teléfono</dt>
     <dd>{{ user.telefono or 'Sin teléfono' }}</dd>
     <dt>Rol</dt>
-    <dd>{{ 'Administrador' if user.rol == 'admin' else 'Miembro' }}</dd>
+    <dd>{{ badge(user.rol, 'Administrador' if user.rol == 'admin' else 'Miembro') }}</dd>
     <dt>Estado</dt>
-    <dd>{{ 'Activo' if user.activo else 'Inactivo' }}</dd>
+    <dd>{{ badge('active' if user.activo else 'inactive', 'Activo' if user.activo else 'Inactivo') }}</dd>
     <dt>Fecha de creación</dt>
     <dd>{{ user.fecha_creacion }}</dd>
 </dl>
@@ -23,7 +25,7 @@
 <form method="post" action="{{ url_for('user_delete', user_id=user.id) }}"
       onsubmit="return confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit">Eliminar usuario</button>
+    <button type="submit" class="button-danger">Eliminar usuario</button>
 </form>
 {% endif %}
 {% endblock %}

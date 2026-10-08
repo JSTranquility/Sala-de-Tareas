@@ -70,6 +70,8 @@ class PaymentsTests(TaskTestCase):
         listed = self.client.get("/payments/").get_data(as_text=True)
         self.assertIn("USD 12.50", listed)
         self.assertIn("DOP 125.01", listed)
+        self.assertIn(f'data-payment-url="/payments/{usd_id}"', listed)
+        self.assertIn(f'href="/payments/{usd_id}">Ver detalle</a>', listed)
         for path in (f"/payments/{usd_id}", f"/payments/{usd_id}/edit"):
             self.assertEqual(self.client.get(path).status_code, 200)
         response = self.post(f"/payments/{usd_id}/edit", self.payment_data(

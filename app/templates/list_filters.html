@@ -1,0 +1,20 @@
+<form method="get" class="filters">
+    <div>
+        <label for="query">Buscar</label>
+        <input id="query" name="q" value="{{ query }}" maxlength="100" placeholder="Texto a buscar">
+    </div>
+    {% for name, option in filter_options.items() %}
+    <div>
+        <label for="filter-{{ name }}">{{ option[0] }}</label>
+        <select id="filter-{{ name }}" name="{{ name }}">
+            <option value="">Todos</option>
+            {% for value, label in option[1].items() %}
+                <option value="{{ value }}" {% if filters[name] == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endfor %}
+    <button type="submit">Buscar y filtrar</button>
+    <a href="{{ url_for(request.endpoint) }}">Limpiar</a>
+</form>
+<p class="results-meta">{{ pagination.total }} resultados · 10 por página.</p>

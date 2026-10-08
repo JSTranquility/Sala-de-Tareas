@@ -17,12 +17,14 @@ from app.forms import (
     TASK_PRIORITIES,
     TASK_STATES,
     validate_task_form,
+    validate_subject_form,
     validate_task_status,
     validate_user_form,
     validate_payment_form,
     validate_payment_notes,
 )
 from app.models import format_amount
+from app.utils.paypal_simulator import simulate_payment
 from app.utils.data import CRUD as crud
 from app.utils.data.database import get_database_path, initialize_database
 from migrations.add_task_fields import migrate as migrate_tasks
@@ -102,6 +104,31 @@ def admin_required(view):
     return wrapped
 
 
+def list_context(entity: str, filter_options: dict) -> dict:
+    """Valida filtros GET y conserva sus valores al cambiar de página."""
+    query = request.args.get("q", "").strip()
+    if len(query) > 100:
+        abort(400, description="La búsqueda admite hasta 100 caracteres.")
+    filters = {name: request.args.get(name, "") for name in filter_options}
+    for name, value in filters.items():
+        if value and value not in filter_options[name][1]:
+            abort(400, description="Selecciona un filtro válido.")
+    page_text = request.args.get("page", "1")
+    if (not page_text.isascii() or not page_text.isdigit()
+            or len(page_text) > 9 or int(page_text) < 1):
+        abort(400, description="La página debe ser un entero positivo.")
+    assigned = (g.user["id"]
+                if entity == "tasks" and g.user["rol"] != "admin" else None)
+    pagination = crud.get_filtered_page(entity, query, filters, int(page_text), assigned)
+    params = {"q": query, **filters}
+    return {entity: pagination["items"], "pagination": pagination,
+            "query": query, "filters": filters, "filter_options": filter_options,
+            "previous_url": url_for(request.endpoint, **params, page=pagination["page"] - 1)
+            if pagination["page"] > 1 else None,
+            "next_url": url_for(request.endpoint, **params, page=pagination["page"] + 1)
+            if pagination["page"] < pagination["pages"] else None}
+
+
 def register_routes(app: Flask) -> None:
     """Registra rutas y comandos; no inicializa ni actualiza datos al importar."""
     app.jinja_env.globals["csrf_token"] = csrf_token
@@ -156,7 +183,8 @@ def register_routes(app: Flask) -> None:
     @app.get("/")
     @login_required
     def index():
-        return render_template("index.html")
+        assigned = g.user["id"] if g.user["rol"] != "admin" else None
+        return render_template("index.html", dashboard=crud.get_dashboard(assigned))
 
     @app.route("/auth/login", methods=["GET", "POST"])
     def login():
@@ -192,7 +220,10 @@ def register_routes(app: Flask) -> None:
     @app.get("/users/")
     @admin_required
     def users_list():
-        return render_template("users/list.html", users=crud.get_all_users())
+        return render_template("users/list.html", **list_context("users", {
+            "rol": ("Rol", {"admin": "Administrador", "member": "Miembro"}),
+            "activo": ("Estado", {"1": "Activo", "0": "Inactivo"}),
+        }))
 
     def user_or_404(user_id):
         user = crud.get_user_by_id(user_id)
@@ -295,16 +326,75 @@ def register_routes(app: Flask) -> None:
                 return redirect(url_for("users_list"))
         return redirect(url_for("user_detail", user_id=user_id))
 
+    # Materias: gestión reservada a administradores.
+
+    def subject_or_404(subject_id):
+        subject = crud.get_subject_by_id(subject_id)
+        if subject is None:
+            abort(404)
+        return subject
+
+    @app.get("/subjects/")
+    @admin_required
+    def subjects_list():
+        return render_template("subjects/list.html", subjects=crud.get_all_subjects())
+
+    def save_subject(subject=None):
+        values = dict(subject) if subject else {}
+        errors = {}
+        if request.method == "POST":
+            values, errors = validate_subject_form(request.form)
+            if not errors:
+                if subject:
+                    if not crud.update_subject(subject["id"], values["nombre"],
+                                               values["descripcion"] or None):
+                        abort(404)
+                    subject_id = subject["id"]
+                else:
+                    subject_id = crud.create_subject(values["nombre"],
+                                                     values["descripcion"] or None)
+                flash("Materia actualizada." if subject else "Materia creada.")
+                return redirect(url_for("subject_detail", subject_id=subject_id))
+        return render_template("subjects/form.html", values=values, errors=errors,
+                               editing=subject is not None), 400 if errors else 200
+
+    @app.route("/subjects/new", methods=["GET", "POST"])
+    @admin_required
+    def subject_create():
+        return save_subject()
+
+    @app.get("/subjects/<int:subject_id>")
+    @admin_required
+    def subject_detail(subject_id):
+        return render_template("subjects/detail.html", subject=subject_or_404(subject_id))
+
+    @app.route("/subjects/<int:subject_id>/edit", methods=["GET", "POST"])
+    @admin_required
+    def subject_edit(subject_id):
+        return save_subject(subject_or_404(subject_id))
+
+    @app.post("/subjects/<int:subject_id>/delete")
+    @admin_required
+    def subject_delete(subject_id):
+        subject_or_404(subject_id)
+        try:
+            if not crud.delete_subject(subject_id):
+                abort(404)
+        except sqlite3.IntegrityError:
+            flash("La materia tiene tareas asociadas. Reasígnalas antes de eliminarla.")
+            return redirect(url_for("subject_detail", subject_id=subject_id))
+        flash("Materia eliminada.")
+        return redirect(url_for("subjects_list"))
+
     # Tareas: los miembros solo pueden consultar y cambiar su propio estado.
 
     @app.get("/tasks/")
     @login_required
     def tasks_list():
-        if g.user["rol"] == "admin":
-            tasks = crud.get_all_tasks()
-        else:
-            tasks = crud.get_tasks_by_user(g.user["id"])
-        return render_template("tasks/list.html", tasks=tasks)
+        return render_template("tasks/list.html", **list_context("tasks", {
+            "estado": ("Estado", TASK_STATES),
+            "prioridad": ("Prioridad", TASK_PRIORITIES),
+        }))
 
     def task_or_404(task_id):
         """Busca la tarea y comprueba quién puede acceder a ese registro."""
@@ -465,7 +555,11 @@ def register_routes(app: Flask) -> None:
     @app.get("/payments/")
     @admin_required
     def payments_list():
-        return render_template("payments/list.html", payments=crud.get_all_payments())
+        return render_template("payments/list.html", **list_context("payments", {
+            "estado": ("Estado", PAYMENT_STATES),
+            "moneda": ("Moneda", PAYMENT_CURRENCIES),
+            "metodo": ("Método", PAYMENT_METHODS),
+        }))
 
     def payment_or_404(payment_id):
         payment = crud.get_payment_by_id(payment_id)
@@ -573,6 +667,38 @@ def register_routes(app: Flask) -> None:
     @admin_required
     def payment_detail(payment_id):
         return render_template("payments/detail.html", payment=payment_or_404(payment_id))
+
+    @app.route("/payments/<int:payment_id>/simulate", methods=["GET", "POST"])
+    @admin_required
+    def payment_simulate(payment_id):
+        payment = payment_or_404(payment_id)
+        try:
+            if payment["estado"] != "pendiente":
+                raise ValueError("Solo se pueden simular pagos pendientes.")
+            if payment["pendiente_completar"] or not payment["fecha_creacion"]:
+                raise ValueError("Completa los datos históricos antes de simular el pago.")
+            task = crud.get_task_by_id(payment["tarea_id"])
+            recipient = crud.get_user_by_id(payment["usuario_id"])
+            if task is None or task["estado"] == "cancelada":
+                raise ValueError("La tarea no existe o está cancelada.")
+            if not is_active_user(recipient):
+                raise ValueError("El usuario receptor debe estar activo.")
+            if request.method == "POST":
+                result = simulate_payment(
+                    payment_id, payment["monto"], payment["moneda"],
+                    request.form.get("resultado", ""),
+                )
+                if result["resultado"] == "aprobado":
+                    if not crud.mark_payment_paid(payment_id):
+                        raise ValueError("El pago ya cambió. Vuelve a consultar su detalle.")
+                flash(result["mensaje"])
+                return redirect(url_for("payment_detail", payment_id=payment_id))
+        except ValueError as error:
+            flash(str(error))
+            return render_template("payments/simulate.html", payment=payment,
+                                   can_simulate=False), 400
+        return render_template("payments/simulate.html", payment=payment,
+                               can_simulate=True)
 
     @app.route("/payments/<int:payment_id>/edit", methods=["GET", "POST"])
     @admin_required

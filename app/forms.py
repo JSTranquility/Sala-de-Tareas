@@ -21,6 +21,18 @@ TASK_PRIORITIES = {
     "alta": "Alta",
 }
 
+
+def validate_subject_form(data: Mapping) -> tuple[dict, dict]:
+    """Valida nombre obligatorio y descripción opcional de una materia."""
+    values = {field: data.get(field, "").strip()
+              for field in ("nombre", "descripcion")}
+    errors = {}
+    if not 1 <= len(values["nombre"]) <= 120:
+        errors["nombre"] = "Introduce un nombre de hasta 120 caracteres."
+    if len(values["descripcion"]) > 2000:
+        errors["descripcion"] = "La descripción admite hasta 2000 caracteres."
+    return values, errors
+
 def validate_payment_notes(data: Mapping) -> tuple[dict, dict]:
     """Valida las notas, también cuando el importe ya no se puede editar."""
     values = {"notas": data.get("notas", "").strip()}

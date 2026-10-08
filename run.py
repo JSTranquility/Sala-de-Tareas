@@ -14,7 +14,7 @@ secure_cookies = os.environ.get("SESSION_COOKIE_SECURE", "0").lower() in {
     "1", "true",
 }
 
-app = Flask(__name__, template_folder="app/templates")
+app = Flask(__name__, template_folder="app/templates", static_folder="app/static")
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY") or None,
     DATABASE_PATH=str(get_database_path()),

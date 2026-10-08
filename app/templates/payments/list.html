@@ -1,31 +1,36 @@
 {% extends "base.html" %}
+{% from "ui.html" import icon, badge %}
 {% block content %}
-<h2>Pagos</h2>
-<p><a href="{{ url_for('payment_create') }}">Registrar pago</a></p>
-<p>Cada importe conserva su moneda: USD o pesos dominicanos (DOP).</p>
+<div class="page-heading">
+    <div><span class="eyebrow">CADA REGISTRO, EN ORDEN</span><h2>Pagos</h2><p>Cada importe conserva su moneda: USD o pesos dominicanos (DOP).</p></div>
+    <a class="button" href="{{ url_for('payment_create') }}">{{ icon('plus') }}Registrar pago</a>
+</div>
+{% include "list_filters.html" %}
 {% if payments %}
 <div class="table-scroll">
     <table>
         <thead>
-            <tr><th>Pago</th><th>Tarea</th><th>Receptor</th><th>Importe</th><th>Estado</th></tr>
+            <tr><th>Pago</th><th>Tarea</th><th>Receptor</th><th>Importe</th><th>Estado</th><th>Detalle</th></tr>
         </thead>
         <tbody>
             {% for payment in payments %}
-            <tr>
+            <tr class="payment-row" data-payment-url="{{ url_for('payment_detail', payment_id=payment.id) }}">
                 <td><a href="{{ url_for('payment_detail', payment_id=payment.id) }}">Pago #{{ payment.id }}</a></td>
                 <td>{{ payment.tarea_titulo or 'Tarea pendiente de completar' }}</td>
                 <td>{{ payment.receptor_nombre }}</td>
-                <td>{{ payment.moneda or 'Moneda por identificar' }} {{ payment.monto|amount }}</td>
+                <td class="money">{{ payment.moneda or 'Moneda por identificar' }} {{ payment.monto|amount }}</td>
                 <td>
-                    {{ payment_states.get(payment.estado, 'Estado sin identificar') }}
+                    {{ badge(payment.estado, payment_states.get(payment.estado, 'Estado sin identificar')) }}
                     {% if payment.pendiente_completar %}<br>Información histórica pendiente{% endif %}
                 </td>
+                <td><a href="{{ url_for('payment_detail', payment_id=payment.id) }}">Ver detalle</a></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% else %}
-    <p>Todavía no hay pagos registrados.</p>
+    <div class="empty-state">{{ icon('wallet') }}<h3>Todo listo para el próximo registro</h3><p>No hay pagos que coincidan con la búsqueda y los filtros.</p></div>
 {% endif %}
+{% include "pagination.html" %}
 {% endblock %}

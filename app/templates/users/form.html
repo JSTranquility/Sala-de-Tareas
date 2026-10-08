@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<span class="eyebrow">CUIDA TU EQUIPO</span>
 <h2>{{ 'Editar usuario' if editing else 'Crear usuario' }}</h2>
 <form method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

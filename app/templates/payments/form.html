@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<span class="eyebrow">UN REGISTRO CLARO, SIN COMPLICACIONES</span>
 <h2>{{ 'Editar notas del pago' if notes_only else ('Editar pago' if editing else 'Registrar pago') }}</h2>
 {% if errors.get('general') %}
     <p class="error" role="alert">{{ errors.general }}</p>

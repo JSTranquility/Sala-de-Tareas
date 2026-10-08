@@ -1,13 +1,15 @@
 {% extends "base.html" %}
+{% from "ui.html" import badge %}
 {% block content %}
+<span class="eyebrow">CADA DETALLE CUENTA</span>
 <h2>{{ task.titulo }}</h2>
 <dl>
     <dt>Descripción</dt>
     <dd class="description">{{ task.descripcion or 'Sin descripción' }}</dd>
     <dt>Estado</dt>
-    <dd>{{ task_states.get(task.estado, task.estado) }}</dd>
+    <dd>{{ badge(task.estado, task_states.get(task.estado, task.estado)) }}</dd>
     <dt>Prioridad</dt>
-    <dd>{{ task_priorities.get(task.prioridad, 'Sin especificar') }}</dd>
+    <dd>{{ badge(task.prioridad, task_priorities.get(task.prioridad, 'Sin especificar')) }}</dd>
     <dt>Vencimiento</dt>
     <dd>{{ task.fecha_vencimiento or 'Sin vencimiento' }}</dd>
     <dt>Usuario asignado</dt>
@@ -34,7 +36,7 @@
         <input id="confirm-delete" type="checkbox" required style="width: auto">
         Confirmo que quiero eliminar esta tarea.
     </label>
-    <button type="submit">Eliminar tarea</button>
+    <button type="submit" class="button-danger">Eliminar tarea</button>
 </form>
 {% else %}
 <form method="post" action="{{ url_for('task_edit', task_id=task.id) }}">

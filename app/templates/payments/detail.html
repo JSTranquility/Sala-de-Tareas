@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% from "ui.html" import badge %}
 {% block content %}
+<span class="eyebrow">EL HISTORIAL, A LA VISTA</span>
 <h2>Pago #{{ payment.id }}</h2>
 {% if payment.pendiente_completar %}
     <p class="message">Información histórica pendiente: revisa la tarea, moneda, estado, método e importe. No se han supuesto datos desconocidos.</p>
@@ -15,7 +17,7 @@
     </dd>
     <dt>Usuario receptor</dt><dd>{{ payment.receptor_nombre }}</dd>
     <dt>Importe</dt><dd>{{ payment.moneda or 'Moneda por identificar' }} {{ payment.monto|amount }}</dd>
-    <dt>Estado</dt><dd>{{ payment_states.get(payment.estado, 'Sin identificar') }}</dd>
+    <dt>Estado</dt><dd>{{ badge(payment.estado, payment_states.get(payment.estado, 'Sin identificar')) }}</dd>
     <dt>Método</dt><dd>{{ payment_methods.get(payment.metodo, 'Sin identificar') }}</dd>
     <dt>Fecha de pago</dt><dd>{{ payment.fecha_pago or 'Sin fecha registrada' }}</dd>
     <dt>Fecha de creación</dt><dd>{{ payment.fecha_creacion or 'No consta' }}</dd>
@@ -26,6 +28,9 @@
 </dl>
 <p>Las fechas nuevas se registran en UTC. La aplicación registra pagos; no realiza cobros ni transferencias.</p>
 <div class="actions">
+    {% if payment.estado == 'pendiente' and not payment.pendiente_completar %}
+        <a class="button" href="{{ url_for('payment_simulate', payment_id=payment.id) }}">Simular pago con PayPal</a>
+    {% endif %}
     {% if payment.estado != 'anulado' %}
         <a href="{{ url_for('payment_edit', payment_id=payment.id) }}">{{ 'Editar notas' if payment.estado == 'pagado' else 'Editar pago' }}</a>
     {% endif %}
@@ -39,7 +44,7 @@
         <input id="confirm-annul" type="checkbox" required style="width: auto">
         Confirmo que quiero anular este pago.
     </label>
-    <button type="submit">Anular pago</button>
+    <button type="submit" class="button-danger">Anular pago</button>
 </form>
 {% endif %}
 {% endblock %}

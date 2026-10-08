@@ -1,0 +1,5 @@
+<nav class="actions pagination" aria-label="Paginación">
+    {% if previous_url %}<a href="{{ previous_url }}">Anterior</a>{% endif %}
+    <span>Página {{ pagination.page }} de {{ pagination.pages }}</span>
+    {% if next_url %}<a href="{{ next_url }}">Siguiente</a>{% endif %}
+</nav>

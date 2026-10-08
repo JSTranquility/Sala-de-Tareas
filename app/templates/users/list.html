@@ -1,7 +1,11 @@
 {% extends "base.html" %}
+{% from "ui.html" import icon, badge %}
 {% block content %}
-<h2>Usuarios</h2>
-<p><a href="{{ url_for('user_create') }}">Crear usuario</a></p>
+<div class="page-heading">
+    <div><span class="eyebrow">LAS PERSONAS DETRÁS DEL PROYECTO</span><h2>Usuarios</h2><p>Gestiona tu equipo y sus accesos.</p></div>
+    <a class="button" href="{{ url_for('user_create') }}">{{ icon('plus') }}Crear usuario</a>
+</div>
+{% include "list_filters.html" %}
 {% if users %}
 <div class="table-scroll">
     <table>
@@ -19,8 +23,8 @@
             <tr>
                 <td>{{ user.nombre }}</td>
                 <td>{{ user.correo }}</td>
-                <td>{{ 'Administrador' if user.rol == 'admin' else 'Miembro' }}</td>
-                <td>{{ 'Activo' if user.activo else 'Inactivo' }}</td>
+                <td>{{ badge(user.rol, 'Administrador' if user.rol == 'admin' else 'Miembro') }}</td>
+                <td>{{ badge('active' if user.activo else 'inactive', 'Activo' if user.activo else 'Inactivo') }}</td>
                 <td>
                     <a href="{{ url_for('user_detail', user_id=user.id) }}">
                         Ver detalle
@@ -32,6 +36,7 @@
     </table>
 </div>
 {% else %}
-    <p>No hay usuarios registrados.</p>
+    <div class="empty-state">{{ icon('users') }}<h3>Vamos a encontrar a tu equipo</h3><p>No hay usuarios que coincidan con la búsqueda y los filtros.</p></div>
 {% endif %}
+{% include "pagination.html" %}
 {% endblock %}
